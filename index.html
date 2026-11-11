@@ -564,7 +564,11 @@ if (mode === "edit") {
   });
 
   $("btn-play-now").addEventListener("click", () => {
-    location.href = $("share-url").value; // hash change triggers the reload
+    const url = $("share-url").value;
+    // If the address bar already shows this URL (stuck state), a plain
+    // assignment fires no hashchange — reload explicitly instead.
+    if (location.href === url) location.reload();
+    else location.href = url; // hash change triggers the reload
   });
 
   $("btn-share-close").addEventListener("click", () => { $("share").hidden = true; });
