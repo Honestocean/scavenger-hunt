@@ -14,6 +14,8 @@
     --err: #ff6b6b;
   }
   * { box-sizing: border-box; }
+  /* The hidden attribute must always win, even over display:flex on overlays */
+  [hidden] { display: none !important; }
   html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, sans-serif; }
   #map { position: absolute; inset: 0; }
 
@@ -45,7 +47,6 @@
   button:active { background: #3e3e63; }
   button.primary { background: var(--accent); color: #11271f; }
   button.danger { background: #5a2e2e; }
-  button[hidden] { display: none !important; }
 
   .overlay {
     position: absolute; inset: 0; z-index: 2000;
