@@ -233,6 +233,9 @@ let mode = "test", hunt = null, huntEncoded = null, editClues = [];
   }
 }
 
+// Mode lives in the hash — any hash change is a mode change; reload to re-init.
+window.addEventListener("hashchange", () => location.reload());
+
 // --- Map setup (UK-centred until first fix) ---
 const map = L.map("map", { zoomControl: false }).setView([54.5, -3.0], 6);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -394,8 +397,7 @@ if (mode === "test") {
   });
 
   $("btn-edit").addEventListener("click", () => {
-    location.hash = "#edit";
-    location.reload();
+    location.hash = "#edit"; // hashchange listener reloads into editor mode
   });
 }
 
@@ -562,15 +564,13 @@ if (mode === "edit") {
   });
 
   $("btn-play-now").addEventListener("click", () => {
-    location.href = $("share-url").value;
-    location.reload();
+    location.href = $("share-url").value; // hash change triggers the reload
   });
 
   $("btn-share-close").addEventListener("click", () => { $("share").hidden = true; });
 
   $("btn-exit-editor").addEventListener("click", () => {
-    location.hash = "";
-    location.reload();
+    location.hash = ""; // hashchange listener reloads into test mode
   });
 
   renderList();
