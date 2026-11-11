@@ -1,0 +1,260 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
+<meta name="theme-color" content="#1a1a2e">
+<title>GPS Test — Scavenger Hunt</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<style>
+  :root {
+    --panel-bg: rgba(26, 26, 46, 0.92);
+    --accent: #4ecca3;
+    --warn: #ffb347;
+    --err: #ff6b6b;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+  #map { position: absolute; inset: 0; }
+
+  .panel {
+    position: absolute; left: 10px; right: 10px; z-index: 1000;
+    background: var(--panel-bg); color: #eee;
+    border-radius: 12px; padding: 10px 14px;
+    box-shadow: 0 2px 12px rgba(0,0,0,.4);
+    font-size: 14px; line-height: 1.5;
+  }
+  #status-panel { top: 10px; }
+  #status-panel .row { display: flex; justify-content: space-between; gap: 8px; }
+  #status-panel .label { opacity: .7; }
+  #gps-state { font-weight: 600; }
+  #gps-state.ok { color: var(--accent); }
+  #gps-state.warn { color: var(--warn); }
+  #gps-state.err { color: var(--err); }
+
+  #target-panel { bottom: 10px; }
+  #target-panel .hint { opacity: .75; font-size: 13px; }
+  #distance { font-size: 26px; font-weight: 700; color: var(--accent); }
+
+  .btnrow { display: flex; gap: 8px; margin-top: 8px; }
+  button {
+    flex: 1; padding: 12px 10px; border: 0; border-radius: 10px;
+    background: #2e2e4e; color: #eee; font-size: 15px; font-weight: 600;
+    touch-action: manipulation;
+  }
+  button:active { background: #3e3e63; }
+  button.primary { background: var(--accent); color: #11271f; }
+  button[hidden] { display: none !important; }
+
+  #arrived {
+    position: absolute; inset: 0; z-index: 2000;
+    display: flex; flex-direction: column; align-items: center; justify-content: center;
+    background: rgba(17, 39, 31, 0.95); color: #fff; text-align: center; padding: 24px;
+  }
+  #arrived h1 { font-size: 42px; margin: 0 0 8px; }
+  #arrived p { font-size: 18px; opacity: .9; }
+  #arrived button { flex: 0; padding: 14px 28px; margin-top: 20px; }
+</style>
+</head>
+<body>
+<div id="map"></div>
+
+<div class="panel" id="status-panel">
+  <div class="row"><span class="label">GPS</span><span id="gps-state" class="warn">waiting for permission…</span></div>
+  <div class="row"><span class="label">Accuracy</span><span id="accuracy">—</span></div>
+  <div class="row"><span class="label">Position</span><span id="coords">—</span></div>
+  <div class="row"><span class="label">Screen lock</span><span id="wakelock">—</span></div>
+</div>
+
+<div class="panel" id="target-panel">
+  <div class="hint" id="target-hint">Tap anywhere on the map to set a test target.</div>
+  <div id="target-info" hidden>
+    <div class="row" style="display:flex;justify-content:space-between;align-items:baseline">
+      <span>Distance to target</span><span id="distance">—</span>
+    </div>
+    <div class="hint">Arrive within <span id="radius-label">25</span> m to trigger the clue.</div>
+  </div>
+  <div class="btnrow">
+    <button id="btn-center" class="primary">Centre on me</button>
+    <button id="btn-clear" hidden>Clear target</button>
+  </div>
+</div>
+
+<div id="arrived" hidden>
+  <h1>🎉 You made it!</h1>
+  <p>This is where the next clue would appear.<br>GPS arrival detection works.</p>
+  <button class="primary" id="btn-again">Keep testing</button>
+</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<script>
+"use strict";
+
+const ARRIVAL_RADIUS_M = 25;
+const MAX_TRIGGER_ACCURACY_M = 35;   // ignore fixes worse than this for arrival checks
+const CONSECUTIVE_FIXES_NEEDED = 3;  // fixes inside radius before declaring arrival
+
+// --- Map setup (UK-centred until first fix) ---
+const map = L.map("map", { zoomControl: false }).setView([54.5, -3.0], 6);
+L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
+  maxZoom: 19,
+  attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
+}).addTo(map);
+
+// --- State ---
+let myPos = null;          // {lat, lng, accuracy}
+let myMarker = null, myCircle = null;
+let target = null;         // L.LatLng
+let targetMarker = null, targetCircle = null;
+let follow = true;
+let arrivedShown = false;
+let fixesInsideRadius = 0;
+let poorAccuracySince = null; // for the "precise location off?" warning
+
+const $ = id => document.getElementById(id);
+
+// --- Geolocation ---
+function setGpsState(text, cls) {
+  const el = $("gps-state");
+  el.textContent = text;
+  el.className = cls;
+}
+
+if (!("geolocation" in navigator)) {
+  setGpsState("not supported on this device", "err");
+} else {
+  navigator.geolocation.watchPosition(onFix, onGeoError, {
+    enableHighAccuracy: true,
+    maximumAge: 0,
+    timeout: 20000
+  });
+}
+
+function onFix(pos) {
+  const { latitude: lat, longitude: lng, accuracy } = pos.coords;
+  myPos = { lat, lng, accuracy };
+
+  const quality = accuracy <= 20 ? "ok" : accuracy <= 60 ? "warn" : "err";
+  setGpsState(accuracy <= 20 ? "good fix" : accuracy <= 60 ? "ok fix" : "poor fix", quality);
+
+  // Android 12+ "Approximate location" silently defeats high accuracy.
+  // If accuracy stays >100 m for 30 s, tell the user how to fix it.
+  if (accuracy > 100) {
+    if (!poorAccuracySince) poorAccuracySince = Date.now();
+    if (Date.now() - poorAccuracySince > 30000) {
+      setGpsState("accuracy stuck >100 m — check Android Settings → Apps → Chrome → Location → Precise is ON", "err");
+    }
+  } else {
+    poorAccuracySince = null;
+  }
+  $("accuracy").textContent = "±" + Math.round(accuracy) + " m";
+  $("coords").textContent = lat.toFixed(5) + ", " + lng.toFixed(5);
+
+  const ll = [lat, lng];
+  if (!myMarker) {
+    myMarker = L.circleMarker(ll, { radius: 8, color: "#fff", weight: 2, fillColor: "#2b7cff", fillOpacity: 1 }).addTo(map);
+    myCircle = L.circle(ll, { radius: accuracy, color: "#2b7cff", weight: 1, fillOpacity: 0.12 }).addTo(map);
+    map.setView(ll, 17);
+  } else {
+    myMarker.setLatLng(ll);
+    myCircle.setLatLng(ll).setRadius(accuracy);
+    if (follow) map.panTo(ll, { animate: true });
+  }
+  updateDistance();
+}
+
+function onGeoError(err) {
+  const msgs = {
+    1: "permission denied — allow location in site settings",
+    2: "position unavailable — go outside / enable GPS",
+    3: "timed out — retrying…"
+  };
+  setGpsState(msgs[err.code] || err.message, "err");
+}
+
+// --- Distance (haversine) ---
+function haversine(a, b) {
+  const R = 6371000, rad = Math.PI / 180;
+  const dLat = (b.lat - a.lat) * rad, dLng = (b.lng - a.lng) * rad;
+  const s = Math.sin(dLat / 2) ** 2 +
+            Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
+  return 2 * R * Math.asin(Math.sqrt(s));
+}
+
+function updateDistance() {
+  if (!myPos || !target) return;
+  const d = haversine(myPos, target);
+  $("distance").textContent = d >= 1000 ? (d / 1000).toFixed(2) + " km" : Math.round(d) + " m";
+
+  // Arrival requires several consecutive accurate fixes inside the radius,
+  // so a single GPS jump or a stale low-accuracy fix can't false-trigger.
+  if (d <= ARRIVAL_RADIUS_M && myPos.accuracy <= MAX_TRIGGER_ACCURACY_M) {
+    fixesInsideRadius++;
+  } else {
+    fixesInsideRadius = 0;
+  }
+  if (fixesInsideRadius >= CONSECUTIVE_FIXES_NEEDED && !arrivedShown) {
+    arrivedShown = true;
+    if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
+    $("arrived").hidden = false;
+  }
+}
+
+// --- Target placement ---
+map.on("click", e => {
+  target = e.latlng;
+  arrivedShown = false;
+  fixesInsideRadius = 0;
+  if (targetMarker) { targetMarker.remove(); targetCircle.remove(); }
+  targetMarker = L.marker(target).addTo(map);
+  targetCircle = L.circle(target, { radius: ARRIVAL_RADIUS_M, color: "#4ecca3", weight: 2, fillOpacity: 0.15 }).addTo(map);
+  $("target-hint").hidden = true;
+  $("target-info").hidden = false;
+  $("btn-clear").hidden = false;
+  $("radius-label").textContent = ARRIVAL_RADIUS_M;
+  updateDistance();
+});
+
+map.on("dragstart", () => { follow = false; });
+
+$("btn-center").addEventListener("click", () => {
+  follow = true;
+  if (myPos) map.setView([myPos.lat, myPos.lng], Math.max(map.getZoom(), 17));
+});
+
+$("btn-clear").addEventListener("click", () => {
+  if (targetMarker) { targetMarker.remove(); targetCircle.remove(); }
+  target = targetMarker = targetCircle = null;
+  arrivedShown = false;
+  fixesInsideRadius = 0;
+  $("target-hint").hidden = false;
+  $("target-info").hidden = true;
+  $("btn-clear").hidden = true;
+});
+
+$("btn-again").addEventListener("click", () => {
+  $("arrived").hidden = true;
+});
+
+// --- Keep screen awake while hunting ---
+async function requestWakeLock() {
+  if (!("wakeLock" in navigator)) { $("wakelock").textContent = "unsupported"; return; }
+  try {
+    const lock = await navigator.wakeLock.request("screen");
+    $("wakelock").textContent = "screen kept on";
+    lock.addEventListener("release", () => { $("wakelock").textContent = "released"; });
+  } catch {
+    $("wakelock").textContent = "blocked";
+  }
+}
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") requestWakeLock();
+});
+// Wake lock needs a user gesture on some versions; first tap anywhere grabs it.
+document.addEventListener("click", function once() {
+  requestWakeLock();
+  document.removeEventListener("click", once);
+}, { once: true });
+</script>
+</body>
+</html>
