@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#1a1a2e">
-<title>GPS Test — Scavenger Hunt</title>
+<title>Scavenger Hunt</title>
 <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
 <style>
   :root {
@@ -32,9 +32,9 @@
   #gps-state.warn { color: var(--warn); }
   #gps-state.err { color: var(--err); }
 
-  #target-panel { bottom: 10px; }
-  #target-panel .hint { opacity: .75; font-size: 13px; }
-  #distance { font-size: 26px; font-weight: 700; color: var(--accent); }
+  .bottom { bottom: 10px; }
+  .hint { opacity: .75; font-size: 13px; }
+  #distance, #play-distance { font-size: 26px; font-weight: 700; color: var(--accent); }
 
   .btnrow { display: flex; gap: 8px; margin-top: 8px; }
   button {
@@ -44,16 +44,58 @@
   }
   button:active { background: #3e3e63; }
   button.primary { background: var(--accent); color: #11271f; }
+  button.danger { background: #5a2e2e; }
   button[hidden] { display: none !important; }
 
-  #arrived {
+  .overlay {
     position: absolute; inset: 0; z-index: 2000;
     display: flex; flex-direction: column; align-items: center; justify-content: center;
     background: rgba(17, 39, 31, 0.95); color: #fff; text-align: center; padding: 24px;
   }
-  #arrived h1 { font-size: 42px; margin: 0 0 8px; }
-  #arrived p { font-size: 18px; opacity: .9; }
-  #arrived button { flex: 0; padding: 14px 28px; margin-top: 20px; }
+  .overlay h1 { font-size: 42px; margin: 0 0 8px; }
+  .overlay p { font-size: 18px; opacity: .9; max-width: 480px; }
+  .overlay .cluecard {
+    background: rgba(255,255,255,.1); border-radius: 12px;
+    padding: 16px 20px; font-size: 20px; max-width: 480px; margin-top: 8px;
+  }
+  .overlay button { flex: 0; padding: 14px 28px; margin-top: 20px; min-width: 180px; }
+
+  /* Play mode */
+  #play-clue { font-size: 18px; margin: 4px 0 6px; }
+  #play-progress { font-size: 12px; opacity: .7; text-transform: uppercase; letter-spacing: .06em; }
+
+  /* Editor */
+  #editor-panel { max-height: 55%; overflow-y: auto; }
+  #editor-panel input[type=text] {
+    width: 100%; padding: 10px; border: 0; border-radius: 8px;
+    background: #2e2e4e; color: #eee; font-size: 15px; margin-top: 4px;
+  }
+  #clue-list { margin: 8px 0 0; padding: 0; list-style: none; }
+  #clue-list li {
+    display: flex; align-items: center; gap: 8px;
+    padding: 6px 8px; border-radius: 8px; margin-top: 4px; background: rgba(255,255,255,.06);
+  }
+  #clue-list li.selected { outline: 2px solid var(--accent); }
+  #clue-list .num {
+    flex: 0 0 auto; width: 22px; height: 22px; border-radius: 50%;
+    background: var(--accent); color: #11271f; font-weight: 700; font-size: 13px;
+    display: flex; align-items: center; justify-content: center;
+  }
+  #clue-list .txt { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
+  #clue-list .del { flex: 0 0 auto; width: 34px; padding: 6px 0; background: #5a2e2e; }
+  .checkrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
+  #share-url {
+    width: 100%; max-width: 480px; height: 110px; margin-top: 12px;
+    border-radius: 8px; border: 0; padding: 10px; font-size: 12px;
+    background: rgba(255,255,255,.12); color: #fff; word-break: break-all;
+  }
+
+  .clue-pin {
+    background: var(--accent); color: #11271f; font-weight: 700;
+    border-radius: 50%; width: 26px; height: 26px;
+    display: flex; align-items: center; justify-content: center;
+    border: 2px solid #fff; box-shadow: 0 1px 4px rgba(0,0,0,.5); font-size: 13px;
+  }
 </style>
 </head>
 <body>
@@ -62,14 +104,15 @@
 <div class="panel" id="status-panel">
   <div class="row"><span class="label">GPS</span><span id="gps-state" class="warn">waiting for permission…</span></div>
   <div class="row"><span class="label">Accuracy</span><span id="accuracy">—</span></div>
-  <div class="row"><span class="label">Position</span><span id="coords">—</span></div>
+  <div class="row" id="coords-row"><span class="label">Position</span><span id="coords">—</span></div>
   <div class="row"><span class="label">Screen lock</span><span id="wakelock">—</span></div>
 </div>
 
-<div class="panel" id="target-panel">
+<!-- ============ TEST MODE ============ -->
+<div class="panel bottom" id="test-panel" hidden>
   <div class="hint" id="target-hint">Tap anywhere on the map to set a test target.</div>
   <div id="target-info" hidden>
-    <div class="row" style="display:flex;justify-content:space-between;align-items:baseline">
+    <div style="display:flex;justify-content:space-between;align-items:baseline">
       <span>Distance to target</span><span id="distance">—</span>
     </div>
     <div class="hint">Arrive within <span id="radius-label">25</span> m to trigger the clue.</div>
@@ -77,13 +120,72 @@
   <div class="btnrow">
     <button id="btn-center" class="primary">Centre on me</button>
     <button id="btn-clear" hidden>Clear target</button>
+    <button id="btn-edit">Create a hunt</button>
   </div>
 </div>
 
-<div id="arrived" hidden>
+<!-- ============ PLAY MODE ============ -->
+<div class="panel bottom" id="play-panel" hidden>
+  <div id="play-progress">Clue 1 of 1</div>
+  <div id="play-clue">—</div>
+  <div id="play-dist-row" style="display:flex;justify-content:space-between;align-items:baseline">
+    <span>Distance</span><span id="play-distance">—</span>
+  </div>
+  <div class="btnrow">
+    <button id="btn-play-center" class="primary">Centre on me</button>
+    <button id="btn-play-reset" class="danger">Restart hunt</button>
+  </div>
+</div>
+
+<!-- ============ EDITOR MODE ============ -->
+<div class="panel bottom" id="editor-panel" hidden>
+  <div class="hint">Tap the map where a clue's answer is hidden. Drag a pin to fine-tune it.</div>
+  <label>Hunt title
+    <input type="text" id="edit-title" placeholder="e.g. Garden treasure hunt" maxlength="60">
+  </label>
+  <ul id="clue-list"></ul>
+  <div id="clue-text-wrap" hidden>
+    <label>Clue text for <b id="edit-clue-num">#1</b> (what players read to find this spot)
+      <input type="text" id="edit-clue-text" placeholder="e.g. Where the old oak keeps watch…" maxlength="200">
+    </label>
+  </div>
+  <div class="checkrow">
+    <input type="checkbox" id="edit-showdist" checked>
+    <label for="edit-showdist">Show live distance to players (easier)</label>
+  </div>
+  <div class="btnrow">
+    <button id="btn-share" class="primary">Get link</button>
+    <button id="btn-exit-editor">Exit editor</button>
+  </div>
+</div>
+
+<!-- ============ OVERLAYS ============ -->
+<div class="overlay" id="arrived" hidden>
   <h1>🎉 You made it!</h1>
   <p>This is where the next clue would appear.<br>GPS arrival detection works.</p>
   <button class="primary" id="btn-again">Keep testing</button>
+</div>
+
+<div class="overlay" id="found" hidden>
+  <h1>🎉 You found it!</h1>
+  <p id="found-sub">Here's your next clue:</p>
+  <div class="cluecard" id="found-clue"></div>
+  <button class="primary" id="btn-next">Let's go!</button>
+</div>
+
+<div class="overlay" id="finished" hidden>
+  <h1>🏆 Hunt complete!</h1>
+  <p id="finished-sub">You found every clue. Well done!</p>
+  <button id="btn-finish-reset">Play again</button>
+</div>
+
+<div class="overlay" id="share" hidden>
+  <h1>🔗 Your hunt link</h1>
+  <p>Send this link to the players. Open it in Chrome on each phone.</p>
+  <textarea id="share-url" readonly></textarea>
+  <button class="primary" id="btn-copy">Copy link</button>
+  <button id="btn-play-now">Play it now</button>
+  <button id="btn-share-close">Back to editor</button>
 </div>
 
 <script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
@@ -94,6 +196,43 @@ const ARRIVAL_RADIUS_M = 25;
 const MAX_TRIGGER_ACCURACY_M = 35;   // ignore fixes worse than this for arrival checks
 const CONSECUTIVE_FIXES_NEEDED = 3;  // fixes inside radius before declaring arrival
 
+const $ = id => document.getElementById(id);
+
+// --- Hunt data encoding (base64url JSON in the URL hash — no server needed) ---
+function encodeHunt(obj) {
+  const b = btoa(unescape(encodeURIComponent(JSON.stringify(obj))));
+  return b.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
+}
+function decodeHunt(s) {
+  s = s.replace(/-/g, "+").replace(/_/g, "/");
+  while (s.length % 4) s += "=";
+  return JSON.parse(decodeURIComponent(escape(atob(s))));
+}
+function huntKey(encoded) { // stable key for localStorage progress
+  let h = 5381;
+  for (let i = 0; i < encoded.length; i++) h = ((h << 5) + h + encoded.charCodeAt(i)) >>> 0;
+  return "hunt-progress-" + h.toString(36);
+}
+
+// --- Mode from URL hash: #hunt=… plays, #edit (or #edit=…) edits, else GPS test ---
+let mode = "test", hunt = null, huntEncoded = null, editClues = [];
+{
+  const h = location.hash.slice(1);
+  if (h.startsWith("hunt=")) {
+    try {
+      huntEncoded = h.slice(5);
+      hunt = decodeHunt(huntEncoded);
+      if (!Array.isArray(hunt.clues) || !hunt.clues.length) throw new Error("no clues");
+      mode = "play";
+    } catch { mode = "test"; hunt = null; huntEncoded = null; }
+  } else if (h === "edit" || h.startsWith("edit=")) {
+    mode = "edit";
+    if (h.startsWith("edit=")) {
+      try { const d = decodeHunt(h.slice(5)); editClues = d.clues || []; } catch { editClues = []; }
+    }
+  }
+}
+
 // --- Map setup (UK-centred until first fix) ---
 const map = L.map("map", { zoomControl: false }).setView([54.5, -3.0], 6);
 L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
@@ -101,17 +240,16 @@ L.tileLayer("https://tile.openstreetmap.org/{z}/{x}/{y}.png", {
   attribution: '&copy; <a href="https://www.openstreetmap.org/copyright">OpenStreetMap</a> contributors'
 }).addTo(map);
 
-// --- State ---
+// --- Shared state ---
 let myPos = null;          // {lat, lng, accuracy}
 let myMarker = null, myCircle = null;
-let target = null;         // L.LatLng
+let target = null;         // {lat, lng} the point arrival is measured against
+let targetRadius = ARRIVAL_RADIUS_M;
 let targetMarker = null, targetCircle = null;
 let follow = true;
-let arrivedShown = false;
+let arrivalLatched = false; // stops re-triggering while an overlay is up
 let fixesInsideRadius = 0;
-let poorAccuracySince = null; // for the "precise location off?" warning
-
-const $ = id => document.getElementById(id);
+let poorAccuracySince = null;
 
 // --- Geolocation ---
 function setGpsState(text, cls) {
@@ -138,7 +276,6 @@ function onFix(pos) {
   setGpsState(accuracy <= 20 ? "good fix" : accuracy <= 60 ? "ok fix" : "poor fix", quality);
 
   // Android 12+ "Approximate location" silently defeats high accuracy.
-  // If accuracy stays >100 m for 30 s, tell the user how to fix it.
   if (accuracy > 100) {
     if (!poorAccuracySince) poorAccuracySince = Date.now();
     if (Date.now() - poorAccuracySince > 30000) {
@@ -180,61 +317,266 @@ function haversine(a, b) {
             Math.cos(a.lat * rad) * Math.cos(b.lat * rad) * Math.sin(dLng / 2) ** 2;
   return 2 * R * Math.asin(Math.sqrt(s));
 }
+function fmtDist(d) { return d >= 1000 ? (d / 1000).toFixed(2) + " km" : Math.round(d) + " m"; }
 
 function updateDistance() {
   if (!myPos || !target) return;
   const d = haversine(myPos, target);
-  $("distance").textContent = d >= 1000 ? (d / 1000).toFixed(2) + " km" : Math.round(d) + " m";
+  if (mode === "test") $("distance").textContent = fmtDist(d);
+  if (mode === "play" && hunt.showDist !== false) $("play-distance").textContent = fmtDist(d);
 
   // Arrival requires several consecutive accurate fixes inside the radius,
   // so a single GPS jump or a stale low-accuracy fix can't false-trigger.
-  if (d <= ARRIVAL_RADIUS_M && myPos.accuracy <= MAX_TRIGGER_ACCURACY_M) {
+  if (d <= targetRadius && myPos.accuracy <= MAX_TRIGGER_ACCURACY_M) {
     fixesInsideRadius++;
   } else {
     fixesInsideRadius = 0;
   }
-  if (fixesInsideRadius >= CONSECUTIVE_FIXES_NEEDED && !arrivedShown) {
-    arrivedShown = true;
+  if (fixesInsideRadius >= CONSECUTIVE_FIXES_NEEDED && !arrivalLatched) {
+    arrivalLatched = true;
     if (navigator.vibrate) navigator.vibrate([200, 100, 200]);
-    $("arrived").hidden = false;
+    onArrival();
   }
 }
 
-// --- Target placement ---
-map.on("click", e => {
-  target = e.latlng;
-  arrivedShown = false;
+function setTarget(lat, lng, radius) {
+  target = { lat, lng };
+  targetRadius = radius || ARRIVAL_RADIUS_M;
+  arrivalLatched = false;
   fixesInsideRadius = 0;
-  if (targetMarker) { targetMarker.remove(); targetCircle.remove(); }
-  targetMarker = L.marker(target).addTo(map);
-  targetCircle = L.circle(target, { radius: ARRIVAL_RADIUS_M, color: "#4ecca3", weight: 2, fillOpacity: 0.15 }).addTo(map);
-  $("target-hint").hidden = true;
-  $("target-info").hidden = false;
-  $("btn-clear").hidden = false;
-  $("radius-label").textContent = ARRIVAL_RADIUS_M;
-  updateDistance();
-});
+}
 
-map.on("dragstart", () => { follow = false; });
+function onArrival() {
+  if (mode === "test") { $("arrived").hidden = false; return; }
+  if (mode !== "play") return;
+  // Found clue at progress index; advance and persist.
+  progress++;
+  localStorage.setItem(progressKey, String(progress));
+  if (progress >= hunt.clues.length) {
+    target = null;
+    $("finished").hidden = false;
+  } else {
+    $("found-clue").textContent = hunt.clues[progress].t;
+    $("found").hidden = false;
+  }
+}
 
-$("btn-center").addEventListener("click", () => {
-  follow = true;
-  if (myPos) map.setView([myPos.lat, myPos.lng], Math.max(map.getZoom(), 17));
-});
+// ================= TEST MODE =================
+if (mode === "test") {
+  $("test-panel").hidden = false;
 
-$("btn-clear").addEventListener("click", () => {
-  if (targetMarker) { targetMarker.remove(); targetCircle.remove(); }
-  target = targetMarker = targetCircle = null;
-  arrivedShown = false;
-  fixesInsideRadius = 0;
-  $("target-hint").hidden = false;
-  $("target-info").hidden = true;
-  $("btn-clear").hidden = true;
-});
+  map.on("click", e => {
+    setTarget(e.latlng.lat, e.latlng.lng, ARRIVAL_RADIUS_M);
+    if (targetMarker) { targetMarker.remove(); targetCircle.remove(); }
+    targetMarker = L.marker(e.latlng).addTo(map);
+    targetCircle = L.circle(e.latlng, { radius: ARRIVAL_RADIUS_M, color: "#4ecca3", weight: 2, fillOpacity: 0.15 }).addTo(map);
+    $("target-hint").hidden = true;
+    $("target-info").hidden = false;
+    $("btn-clear").hidden = false;
+    $("radius-label").textContent = ARRIVAL_RADIUS_M;
+    updateDistance();
+  });
 
-$("btn-again").addEventListener("click", () => {
-  $("arrived").hidden = true;
-});
+  $("btn-clear").addEventListener("click", () => {
+    if (targetMarker) { targetMarker.remove(); targetCircle.remove(); }
+    target = targetMarker = targetCircle = null;
+    arrivalLatched = false;
+    fixesInsideRadius = 0;
+    $("target-hint").hidden = false;
+    $("target-info").hidden = true;
+    $("btn-clear").hidden = true;
+  });
+
+  $("btn-again").addEventListener("click", () => {
+    $("arrived").hidden = true;
+    // arrivalLatched stays true until a new target is set, so the overlay
+    // doesn't re-trigger while still standing inside the radius.
+  });
+
+  $("btn-edit").addEventListener("click", () => {
+    location.hash = "#edit";
+    location.reload();
+  });
+}
+
+// ================= PLAY MODE =================
+let progress = 0, progressKey = null;
+if (mode === "play") {
+  $("play-panel").hidden = false;
+  document.title = hunt.title ? hunt.title + " — Scavenger Hunt" : "Scavenger Hunt";
+  $("coords-row").style.display = "none"; // less clutter for players
+  if (hunt.showDist === false) $("play-dist-row").style.display = "none";
+
+  progressKey = huntKey(huntEncoded);
+  progress = Math.min(parseInt(localStorage.getItem(progressKey) || "0", 10) || 0, hunt.clues.length);
+
+  function showCurrentClue() {
+    if (progress >= hunt.clues.length) {
+      target = null;
+      $("play-progress").textContent = "Finished";
+      $("play-clue").textContent = "🏆 " + (hunt.title || "Hunt") + " complete!";
+      $("finished").hidden = false;
+      return;
+    }
+    const c = hunt.clues[progress];
+    $("play-progress").textContent = "Clue " + (progress + 1) + " of " + hunt.clues.length;
+    $("play-clue").textContent = c.t;
+    setTarget(c.lat, c.lng, c.r || ARRIVAL_RADIUS_M);
+    // No target marker in play mode — finding the spot is the game.
+  }
+  showCurrentClue();
+
+  $("btn-next").addEventListener("click", () => {
+    $("found").hidden = true;
+    showCurrentClue();
+  });
+
+  // Two-tap restart so a stray tap can't wipe progress (no confirm() — it blocks the tab).
+  let resetArmed = false, resetTimer = null;
+  function doReset() {
+    localStorage.removeItem(progressKey);
+    location.reload();
+  }
+  $("btn-play-reset").addEventListener("click", () => {
+    if (resetArmed) { doReset(); return; }
+    resetArmed = true;
+    $("btn-play-reset").textContent = "Tap again to restart";
+    clearTimeout(resetTimer);
+    resetTimer = setTimeout(() => {
+      resetArmed = false;
+      $("btn-play-reset").textContent = "Restart hunt";
+    }, 3000);
+  });
+  $("btn-finish-reset").addEventListener("click", doReset);
+
+  $("btn-play-center").addEventListener("click", () => {
+    follow = true;
+    if (myPos) map.setView([myPos.lat, myPos.lng], Math.max(map.getZoom(), 17));
+  });
+}
+
+// ================= EDITOR MODE =================
+if (mode === "edit") {
+  $("editor-panel").hidden = false;
+  document.title = "Hunt editor — Scavenger Hunt";
+  let selected = -1;
+  const markers = [];
+
+  function pinIcon(n) {
+    return L.divIcon({ className: "", html: '<div class="clue-pin">' + n + "</div>", iconSize: [26, 26], iconAnchor: [13, 13] });
+  }
+
+  function renderList() {
+    const ul = $("clue-list");
+    ul.innerHTML = "";
+    editClues.forEach((c, i) => {
+      const li = document.createElement("li");
+      if (i === selected) li.className = "selected";
+      const num = document.createElement("span");
+      num.className = "num"; num.textContent = i + 1;
+      const txt = document.createElement("span");
+      txt.className = "txt"; txt.textContent = c.t || "(no clue text yet)";
+      const del = document.createElement("button");
+      del.className = "del"; del.textContent = "✕";
+      del.addEventListener("click", ev => { ev.stopPropagation(); removeClue(i); });
+      li.append(num, txt, del);
+      li.addEventListener("click", () => selectClue(i));
+      ul.appendChild(li);
+    });
+    $("clue-text-wrap").hidden = selected < 0;
+    if (selected >= 0) {
+      $("edit-clue-num").textContent = "#" + (selected + 1);
+      $("edit-clue-text").value = editClues[selected].t || "";
+    }
+  }
+
+  function redrawMarkers() {
+    markers.forEach(m => m.remove());
+    markers.length = 0;
+    editClues.forEach((c, i) => {
+      const m = L.marker([c.lat, c.lng], { icon: pinIcon(i + 1), draggable: true }).addTo(map);
+      m.on("click", () => selectClue(i));
+      m.on("dragend", () => {
+        const ll = m.getLatLng();
+        editClues[i].lat = +ll.lat.toFixed(6);
+        editClues[i].lng = +ll.lng.toFixed(6);
+      });
+      markers.push(m);
+    });
+  }
+
+  function selectClue(i) {
+    selected = i;
+    renderList();
+    $("edit-clue-text").focus();
+  }
+
+  function removeClue(i) {
+    editClues.splice(i, 1);
+    if (selected >= editClues.length) selected = editClues.length - 1;
+    renderList();
+    redrawMarkers();
+  }
+
+  map.on("click", e => {
+    editClues.push({ t: "", lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6) });
+    selected = editClues.length - 1;
+    renderList();
+    redrawMarkers();
+  });
+
+  $("edit-clue-text").addEventListener("input", () => {
+    if (selected < 0) return;
+    editClues[selected].t = $("edit-clue-text").value;
+    const row = $("clue-list").children[selected];
+    if (row) row.querySelector(".txt").textContent = editClues[selected].t || "(no clue text yet)";
+  });
+
+  $("btn-share").addEventListener("click", () => {
+    if (!editClues.length) {
+      $("edit-title").placeholder = "Add at least one clue first — tap the map!";
+      return;
+    }
+    const data = {
+      v: 1,
+      title: $("edit-title").value.trim() || undefined,
+      showDist: $("edit-showdist").checked ? undefined : false,
+      clues: editClues.map(c => ({ t: c.t.trim() || "Find the spot!", lat: c.lat, lng: c.lng }))
+    };
+    const url = location.origin + location.pathname + "#hunt=" + encodeHunt(data);
+    $("share-url").value = url;
+    $("share").hidden = false;
+  });
+
+  $("btn-copy").addEventListener("click", async () => {
+    const ta = $("share-url");
+    try {
+      await navigator.clipboard.writeText(ta.value);
+      $("btn-copy").textContent = "Copied ✓";
+    } catch {
+      ta.focus(); ta.select();
+      document.execCommand("copy");
+      $("btn-copy").textContent = "Copied ✓";
+    }
+    setTimeout(() => { $("btn-copy").textContent = "Copy link"; }, 2000);
+  });
+
+  $("btn-play-now").addEventListener("click", () => {
+    location.href = $("share-url").value;
+    location.reload();
+  });
+
+  $("btn-share-close").addEventListener("click", () => { $("share").hidden = true; });
+
+  $("btn-exit-editor").addEventListener("click", () => {
+    location.hash = "";
+    location.reload();
+  });
+
+  renderList();
+  redrawMarkers();
+  if (editClues.length) map.setView([editClues[0].lat, editClues[0].lng], 16);
+}
 
 // --- Keep screen awake while hunting ---
 async function requestWakeLock() {
