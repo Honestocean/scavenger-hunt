@@ -40,7 +40,7 @@ class Site:
                 shutil.copy2(repo / name, self.dir / name)
         if (repo / "vendor").is_dir():
             shutil.copytree(repo / "vendor", self.dir / "vendor")
-        self.mode = "up"  # "up" | "down" (connection dropped) | "stall" (no answer)
+        self.mode = "up"  # "up" | "down" (connection dropped) | "stall" (no answer) | "cut" (body cut short)
         self.release = threading.Event()
         self.hits = []
         site = self
@@ -53,6 +53,19 @@ class Site:
                 site.hits.append((site.mode, self.path))
                 if site.mode == "stall":
                     site.release.wait(30)
+                if site.mode == "cut":
+                    # Good headers, then the connection dies half-way through the body.
+                    name = self.path.split("?")[0].split("#")[0]
+                    f = site.root / (name.lstrip("/") + ("index.html" if name.endswith("/") else ""))
+                    body = f.read_bytes() if f.is_file() else b"x" * 2000
+                    self.send_response(200)
+                    self.send_header("Content-Type", self.guess_type(str(f)))
+                    self.send_header("Content-Length", str(len(body)))
+                    self.end_headers()
+                    self.wfile.write(body[:len(body) // 2])
+                    self.wfile.flush()
+                    self.close_connection = True
+                    return
                 if site.mode != "up":
                     self.close_connection = True
                     return  # no response at all: the fetch fails
@@ -328,6 +341,33 @@ def test_stalled_network_falls_back_to_the_cache_within_seconds(make_sw_app, sit
     assert 2.5 < took < 15, took
     type_word(a, "apple")
     only_overlay(a, "#unlocked")
+
+
+def test_a_response_cut_off_mid_body_falls_back_to_the_cache(make_sw_app, site):
+    a = make_sw_app().open("#hunt=" + b64u(HUNT))
+    only_overlay(a, "#puzzle")
+    sw_ready(a)
+    reload(a)  # now through the service worker
+    p = a.page
+    assert p.title() == "Offline hunt — Scavenger Hunt"
+    site.set_index("</title>", " HALF</title>")
+    site.mode = "cut"  # signal drops while each file is still arriving
+    for _ in range(2):  # twice: the broken answer must not have replaced the cached copy
+        del site.hits[:]
+        reload(a)
+        assert ("cut", "/" + SUBPATH + "/index.html") in site.hits
+        only_overlay(a, "#puzzle")
+        assert p.evaluate("document.title") == "Offline hunt — Scavenger Hunt"
+        assert p.evaluate("L.version") == "1.9.4"
+        a.settle(300)
+    type_word(a, "apple")
+    only_overlay(a, "#unlocked")
+    # once the signal is back the newest copy arrives as usual
+    site.mode = "up"
+    reload(a)
+    only_overlay(a, "#unlocked")
+    assert "HALF" not in p.evaluate("document.title")  # the hunt's own title is showing
+    assert "HALF" in p.evaluate("fetch('index.html').then(r => r.text())")
 
 
 def test_online_reload_always_gets_the_newest_index(make_sw_app, site):

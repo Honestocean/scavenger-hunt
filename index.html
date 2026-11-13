@@ -16,7 +16,9 @@
   * { box-sizing: border-box; }
   /* The hidden attribute must always win, even over display:flex on overlays */
   [hidden] { display: none !important; }
-  html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, sans-serif; }
+  html, body { height: 100%; margin: 0; font-family: system-ui, -apple-system, sans-serif; overscroll-behavior-y: contain; }
+  #build { position: absolute; right: 8px; bottom: 2px; font-size: 9px; opacity: .35; }
+  #btn-stuck-restart { background: none; text-decoration: underline; opacity: .7; font-weight: 400; min-width: 0; }
   #map { position: absolute; inset: 0; }
 
   .panel {
@@ -103,6 +105,12 @@
     text-decoration: underline; padding: 12px 8px;
   }
   #unlocked-clue, #found-clue { white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* Centred when short; when taller than the screen they start at the top so the
+     heading can always be scrolled to (auto margins collapse to 0 when there is no room). */
+  #found, #unlocked, #intro { justify-content: flex-start; }
+  #found > h1, #unlocked > h1, #intro > .card { margin-top: auto; }
+  #found > button, #unlocked > button, #intro > .card { margin-bottom: auto; }
+  #found > *, #unlocked > *, #intro > * { flex-shrink: 0; }
   #finished-sub { white-space: pre-wrap; overflow-wrap: anywhere; }
   /* A custom final message stands alone: no heading, no buttons */
   #finished.bare h1, #finished.bare button { display: none; }
@@ -111,7 +119,7 @@
   #finished.bare.long #finished-sub { font-size: 24px; font-weight: 600; }
   em { font-style: italic; }
   /* Welcome screen: see-through so the map shows behind it */
-  #intro { background: rgba(17, 39, 31, 0.6); justify-content: center; }
+  #intro { background: rgba(17, 39, 31, 0.6); }
   #intro .card {
     background: rgba(17, 39, 31, 0.9); border-radius: 16px; padding: 22px 20px;
     max-width: 440px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.5);
@@ -185,6 +193,7 @@
   #clue-list .txt { flex: 1; overflow: hidden; white-space: nowrap; text-overflow: ellipsis; }
   #clue-list .rad { flex: 0 0 auto; font-size: 12px; opacity: .7; }
   #clue-list .del { flex: 0 0 auto; width: 34px; padding: 6px 0; background: #5a2e2e; }
+  #clue-list .del.armed { width: auto; padding: 6px 8px; background: #a33; font-size: 13px; }
   #editor-panel label { display: block; margin-top: 6px; }
   #edit-radius { width: 100%; margin-top: 6px; accent-color: var(--accent); }
   .checkrow { display: flex; align-items: center; gap: 8px; margin-top: 8px; font-size: 14px; }
@@ -210,6 +219,7 @@
   <div class="row"><span class="label">Accuracy</span><span id="accuracy">—</span></div>
   <div class="row" id="coords-row"><span class="label">Position</span><span id="coords">—</span></div>
   <div class="row"><span class="label">Screen lock</span><span id="wakelock">—</span></div>
+  <span id="build"></span>
 </div>
 
 <!-- ============ TEST MODE ============ -->
@@ -376,6 +386,7 @@
            autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
     <button class="primary" id="btn-stuck-go" type="submit">Use code</button>
     <button id="btn-stuck-cancel" type="button">Cancel</button>
+    <button id="btn-stuck-restart" type="button">Restart the whole hunt (needs the code)</button>
   </form>
 </div>
 
@@ -450,6 +461,7 @@ if (typeof L === "undefined") { // Leaflet did not load: say so instead of a dea
 <script>
 "use strict";
 
+const BUILD = "build 8";
 const DEFAULT_RADIUS_M = 25;
 const MIN_RADIUS_M = 10, MAX_RADIUS_M = 100;
 const MAX_TRIGGER_ACCURACY_M = 35;   // ignore fixes worse than this for arrival checks
@@ -669,19 +681,37 @@ function setGpsState(text, cls) {
   el.className = cls;
 }
 
-if (!("geolocation" in navigator)) {
-  setGpsState("not supported on this device", "err");
-} else {
-  navigator.geolocation.watchPosition(onFix, onGeoError, {
+$("build").textContent = BUILD;
+
+// The GPS watch can die quietly after the screen has been locked for a while, so it
+// is restarted whenever the page comes back into view or fixes stop arriving.
+let watchId = null, lastFixAt = 0;
+function startWatch() {
+  if (!("geolocation" in navigator)) { setGpsState("not supported on this device", "err"); return; }
+  if (watchId !== null) navigator.geolocation.clearWatch(watchId);
+  watchId = navigator.geolocation.watchPosition(onFix, onGeoError, {
     enableHighAccuracy: true,
     maximumAge: 0,
     timeout: 20000
   });
 }
+function checkGpsAlive() {
+  if (document.visibilityState !== "visible" || !lastFixAt || Date.now() - lastFixAt < 30000) return;
+  setGpsState("searching for GPS…", "warn");
+  fixesInsideRadius = 0;
+  lastFixAt = Date.now(); // wait another 30 s before trying again
+  startWatch();
+}
+startWatch();
+setInterval(checkGpsAlive, 10000);
+document.addEventListener("visibilitychange", () => {
+  if (document.visibilityState === "visible") startWatch();
+});
 
 function onFix(pos) {
   const { latitude: lat, longitude: lng, accuracy } = pos.coords;
   myPos = { lat, lng, accuracy };
+  lastFixAt = Date.now();
 
   const quality = accuracy <= 20 ? "ok" : accuracy <= 60 ? "warn" : "err";
   setGpsState(accuracy <= 20 ? "good fix" : accuracy <= 60 ? "ok fix" : "poor fix", quality);
@@ -858,16 +888,18 @@ function startPlay(data) {
     $("finished-sub").textContent = hunt.end;
     $("finished").classList.add("bare");
     if (hunt.end.length > 60) $("finished").classList.add("long");
-    // No visible buttons on this screen: five quick taps on the message restart the hunt.
+    // No visible buttons on this screen: ten quick taps on the message restart the hunt.
     let taps = 0, lastTap = 0;
     $("finished-sub").addEventListener("click", () => {
       const now = Date.now();
       taps = now - lastTap < 1000 ? taps + 1 : 1;
       lastTap = now;
-      if (taps >= 5) doReset();
+      if (taps >= 10) doReset();
     });
   }
   $("btn-stuck").hidden = $("btn-stuck-puzzle").hidden = !hunt.skip;
+  // With a skip code set, restarting needs the code too (no stray-tap or pocket restarts).
+  $("btn-play-reset").hidden = !!hunt.skip;
 
   progressKey = payloadKey("hunt-progress-", payload);
   // Optional welcome screen, shown until the player taps "I'm ready!" once.
@@ -934,6 +966,7 @@ function startPlay(data) {
       ol.textContent = "";
       steps.forEach(t => { const li = document.createElement("li"); li.textContent = t; ol.appendChild(li); });
       $("intro").hidden = false;
+      $("intro").scrollTop = 0;
       return;
     }
     if (progress >= clues.length) {
@@ -960,6 +993,7 @@ function startPlay(data) {
       $("play-clue").textContent = LOCKED_TEXT;
       setRich($("unlocked-clue"), c.t);
       $("unlocked").hidden = false;
+      $("unlocked").scrollTop = 0;
       return;
     }
     stage = "hunting";
@@ -990,6 +1024,7 @@ function startPlay(data) {
       $("btn-next").textContent = "Let's go!";
     }
     $("found").hidden = false;
+    $("found").scrollTop = 0;
   };
 
   // Saved at once (a reload lands on the "unlocked" card); `delay` only holds the
@@ -1191,6 +1226,14 @@ function startPlay(data) {
   $("btn-stuck").addEventListener("click", openStuck);
   $("btn-stuck-puzzle").addEventListener("click", openStuck);
   $("btn-stuck-cancel").addEventListener("click", () => { $("stuck").hidden = true; });
+  $("btn-stuck-restart").addEventListener("click", () => {
+    if (!hunt.skip || normalisePassword($("stuck-code").value) !== normalisePassword(hunt.skip)) {
+      $("stuck-err").hidden = false;
+      $("stuck-code").focus();
+      return;
+    }
+    doReset();
+  });
   $("stuck-code").addEventListener("input", () => { $("stuck-err").hidden = true; });
   $("stuck-form").addEventListener("submit", ev => {
     ev.preventDefault();
@@ -1322,8 +1365,16 @@ function startEdit(data, password) {
     return { color: "#4ecca3", weight: i === selected ? 2 : 1, fillOpacity: i === selected ? 0.22 : 0.08 };
   }
 
+  let armedDel = null, armedDelTimer = null; // the ✕ button waiting for its second tap
+  function disarmDelete() {
+    clearTimeout(armedDelTimer);
+    if (armedDel) { armedDel.textContent = "✕"; armedDel.classList.remove("armed"); }
+    armedDel = null;
+  }
+
   function renderList() {
     const ul = $("clue-list");
+    disarmDelete(); // the rows are rebuilt, so nothing stays armed
     ul.innerHTML = "";
     editClues.forEach((c, i) => {
       const li = document.createElement("li");
@@ -1342,7 +1393,16 @@ function startEdit(data, password) {
       }
       const del = document.createElement("button");
       del.className = "del"; del.textContent = "✕";
-      del.addEventListener("click", ev => { ev.stopPropagation(); removeClue(i); });
+      // Two taps on the same row's ✕ within 3 s: a stray tap can't delete a stop.
+      del.addEventListener("click", ev => {
+        ev.stopPropagation();
+        if (armedDel === del) { disarmDelete(); removeClue(i); return; }
+        disarmDelete();
+        armedDel = del;
+        del.textContent = "sure?";
+        del.classList.add("armed");
+        armedDelTimer = setTimeout(disarmDelete, 3000);
+      });
       li.append(num, txt, ...(badge ? [badge] : []), rad, del);
       li.addEventListener("click", () => selectClue(i));
       ul.appendChild(li);
@@ -1453,6 +1513,17 @@ function startEdit(data, password) {
   [["edit-wordle-word", "pw"], ["edit-q-text", "pq"], ["edit-q-answers", "pa"], ["edit-q-hint", "ph"], ["edit-q-more", "pm"]].forEach(([id, field]) => {
     $(id).addEventListener("input", () => { if (selected >= 0) editClues[selected][field] = $(id).value; });
   });
+  // One "question = answers = hint" line. The separator is " = " (an equals sign with a
+  // space on each side), so a question may contain a bare "=". A line with no spaced
+  // separator at all ("Q?=a") is split on "=" instead. Returns null when the line cannot
+  // be read one way only; the organiser is then asked to fix it rather than guessing.
+  function parseFollowUp(line) {
+    let parts = (" " + line + " ").split(/\s=\s/).map(x => x.trim());
+    if (parts.length === 1) parts = line.split("=").map(x => x.trim());
+    else if (parts.length > 1 && parts[1].includes("=")) return null; // e.g. "Q? = a =hint"
+    if (parts.length > 3) return null;
+    return { q: parts[0], a: parts[1] || "", h: parts[2] || "" };
+  }
   // Returns { p } (p undefined for "no puzzle") or { error, field } for a puzzle that can't be saved.
   function buildPuzzle(c) {
     if (c.pk === "w") {
@@ -1463,10 +1534,13 @@ function startEdit(data, password) {
       if (!c.pq.trim()) return { error: "the puzzle needs its question text.", field: "edit-q-text" };
       const answers = c.pa.split("|").map(a => a.trim()).filter(a => normaliseAnswer(a)).join("|");
       const lines = c.pm.split("\n").map(l => l.trim()).filter(l => l);
-      const n = lines.map(l => {
-        const parts = l.split("=").map(x => x.trim());
-        return { q: parts[0], a: parts[1] || "", h: parts.slice(2).join(" = ") };
-      });
+      const n = lines.map(parseFollowUp);
+      const unclear = n.findIndex(x => !x);
+      if (unclear >= 0) {
+        return { error: "extra question " + (unclear + 1) + " has too many “ = ”. Use “ = ” only between the question, " +
+          "its answers and its hint, and avoid “ = ” inside the question itself (reword it, or write “=” without spaces).",
+          field: "edit-q-more" };
+      }
       const p = cleanPuzzle({ k: "q", q: c.pq, a: answers, h: c.ph, n });
       if (!p) return { error: "the puzzle needs at least one accepted answer (letters or numbers).", field: "edit-q-answers" };
       if ((p.n || []).length !== lines.length) {
@@ -1540,10 +1614,17 @@ function startEdit(data, password) {
       const base = location.origin + location.pathname;
       $("share-url").value = base + "#hunt=" + p;
       $("edit-url").value = base + "#edit=" + p;
+      // Keep the address bar on the newest edit link, so a reload or a discarded tab
+      // comes back to this version instead of the one the editor was opened with.
+      try {
+        history.replaceState(null, "", "#edit=" + p);
+        if (locked) storeSet(payloadKey("hunt-pw-", p), pw);
+      } catch { /* not essential */ }
       $("share-note").textContent = locked
         ? "Locked with a password. Players must type it to start: “" + normalisePassword(pw) + "” (capitals and extra spaces don't matter)."
         : "No password set — anyone with the player link can start.";
       $("share-note").textContent += noWayPast;
+      $("share-note").textContent += " This hunt has " + editClues.length + (editClues.length === 1 ? " stop." : " stops.");
       $("share").hidden = false;
       $("share").scrollTop = 0;
     } catch {
@@ -1578,8 +1659,20 @@ function startEdit(data, password) {
 
   $("btn-share-close").addEventListener("click", () => { $("share").hidden = true; });
 
+  // Two taps within 3 s: leaving throws away anything not yet turned into links.
+  let exitArmed = false, exitTimer = null;
   $("btn-exit-editor").addEventListener("click", () => {
-    location.hash = ""; // hashchange listener reloads into test mode
+    if (exitArmed) {
+      location.hash = ""; // hashchange listener reloads into test mode
+      return;
+    }
+    exitArmed = true;
+    $("btn-exit-editor").textContent = "Tap again to exit";
+    clearTimeout(exitTimer);
+    exitTimer = setTimeout(() => {
+      exitArmed = false;
+      $("btn-exit-editor").textContent = "Exit";
+    }, 3000);
   });
 
   redrawMarkers();

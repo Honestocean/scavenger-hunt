@@ -187,14 +187,14 @@ def test_default_final_screen_is_unchanged(app):
     expect(p.locator("#btn-finish-reset")).to_be_visible()
 
 
-def test_five_quick_taps_on_the_final_message_restart(app):
+def test_ten_quick_taps_on_the_final_message_restart(app):
     p = finish(app, end="Eleanor Sarah Bradshaw")
-    for _ in range(4):
+    for _ in range(9):
         p.locator("#finished-sub").click()
     app.settle(1500)
-    only_overlay(app, "#finished")  # four taps do nothing
+    only_overlay(app, "#finished")  # nine taps do nothing
     app.fix(*START)
-    for _ in range(5):
+    for _ in range(10):
         p.locator("#finished-sub").click()
     p.wait_for_function("typeof map !== 'undefined'")
     expect(p.locator("#finished")).to_be_hidden()
@@ -203,7 +203,7 @@ def test_five_quick_taps_on_the_final_message_restart(app):
 
 def test_slow_taps_on_the_final_message_do_not_restart(app):
     p = finish(app, end="Eleanor Sarah Bradshaw")
-    for _ in range(6):
+    for _ in range(12):
         p.locator("#finished-sub").click()
-        app.settle(1300)
+        app.settle(1100)
     only_overlay(app, "#finished")

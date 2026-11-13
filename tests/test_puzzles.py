@@ -894,9 +894,13 @@ def test_stuck_screen_layout_and_input_attributes(app):
     c = p.locator("#stuck-code")
     assert c.get_attribute("autocapitalize") == "none" and c.get_attribute("autocomplete") == "off"
     expect(p.locator("#btn-stuck-cancel")).to_be_visible()
-    # the play-panel control is small but tappable and does not push the other buttons off screen
+    # with a skip code the restart lives on this screen (it needs the code), not in the play panel
+    b = p.locator("#btn-stuck-restart").bounding_box()
+    assert b["x"] >= 0 and b["x"] + b["width"] <= 390 and b["y"] + b["height"] <= 844 and b["height"] >= 40, b
     p.locator("#btn-stuck-cancel").click()
-    for sel in ("#btn-play-center", "#btn-play-reset", "#btn-stuck"):
+    expect(p.locator("#btn-play-reset")).to_be_hidden()
+    # the play-panel control is small but tappable and does not push the other buttons off screen
+    for sel in ("#btn-play-center", "#btn-stuck"):
         b = p.locator(sel).bounding_box()
         assert b["x"] >= 0 and b["x"] + b["width"] <= 390 and b["y"] + b["height"] <= 844 and b["height"] >= 40, (sel, b)
 
@@ -1027,6 +1031,8 @@ def test_editor_puzzle_fields_are_per_clue(app):
     expect(p.locator("#edit-puzzle-type")).to_have_value("none")
     # deleting clue 1 keeps the others' puzzles attached to the right clues
     p.locator("#clue-list li .del").nth(0).click()
+    p.locator("#clue-list li .del").nth(0).click()   # deleting takes two taps
+    expect(p.locator("#clue-list li")).to_have_count(3)
     select_row(app, 0)
     expect(p.locator("#edit-puzzle-type")).to_have_value("q")
     expect(p.locator("#edit-q-text")).to_have_value("What has keys?")
@@ -1299,8 +1305,8 @@ def test_move_here_needs_a_selected_clue_and_moves_pin_and_circle(app):
     assert c[0]["t"] == "Clue text 1" and c[1]["t"] == "Clue text 2" and c[1]["r"] == 60 and c[1]["p"]["k"] == "q"
     # with every clue deleted there is nothing to move
     p.locator("#btn-share-close").click()
-    p.locator("#clue-list li .del").nth(0).click()
-    p.locator("#clue-list li .del").nth(0).click()
+    for _ in range(4):   # two taps per clue
+        p.locator("#clue-list li .del").nth(0).click()
     expect(p.locator("#clue-list li")).to_have_count(0)
     expect(p.locator("#btn-move-here")).to_be_disabled()
 

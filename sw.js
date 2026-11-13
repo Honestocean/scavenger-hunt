@@ -3,8 +3,8 @@
  * - Precaches the app shell (the page and the vendored Leaflet).
  * - Same-origin GET only, network-first: a phone with signal always gets the
  *   newest files; if the network fails or takes longer than NETWORK_TIMEOUT_MS
- *   the cached copy is used instead. Every good network answer refreshes the
- *   cache. Cross-origin requests (map tiles) are never touched.
+ *   the cached copy is used instead (also when an answer breaks off part-way
+ *   through its body). Every good network answer refreshes the cache. Cross-origin requests (map tiles) are never touched.
  *
  * All URLs are relative, so this works under any sub-path (GitHub Pages).
  */
@@ -112,7 +112,17 @@ self.addEventListener("fetch", event => {
   // Keeps running after a timeout so a slow answer still refreshes the cache.
   const network = (async () => {
     const response = await fromNetwork(request.url);
-    try { await store(request.url, response); } catch (e) { /* cache full or unavailable */ }
+    try {
+      await store(request.url, response);
+    } catch (e) {
+      // Storing failed. If that is because the body itself broke off part-way (signal
+      // lost mid-download), this response is useless to the page too: count it as a
+      // network failure so the good cached copy is served instead. If the body reads
+      // fine, only the cache was the problem (full or unavailable): carry on.
+      let bodyOk = true;
+      try { await response.clone().arrayBuffer(); } catch (e2) { bodyOk = false; }
+      if (!bodyOk) throw e;
+    }
     return response;
   })();
   event.waitUntil(network.catch(() => {}));
