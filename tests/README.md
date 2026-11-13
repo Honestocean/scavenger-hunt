@@ -3,7 +3,11 @@
 Headless-Chrome tests for `index.html`, written from the feature spec:
 edit link + restore, map follow, per-clue radius, per-hunt password,
 old-link compatibility and regressions (test mode, saved progress,
-two-tap restart, non-ASCII text).
+two-tap restart, non-ASCII text) in `test_ui.py`; puzzles (Wordle and
+question), the play flow around them, reload at every stage, the skip code,
+the final message, the editor's puzzle fields and GPS pin buttons, and one
+end-to-end hunt in `test_puzzles.py`. The shared fixtures (local server,
+browser, `app`, `make_app`) are in `conftest.py`.
 
 ## Prerequisites
 
@@ -24,7 +28,7 @@ From the repo root:
 
 (`PYTHONDONTWRITEBYTECODE=1` and `tests/pytest.ini` keep `__pycache__` and
 `.pytest_cache` out of the repo.) One test: add `-k name`. The run takes
-about a minute and a half.
+about five minutes.
 
 ## How it works
 
@@ -42,3 +46,8 @@ about a minute and a half.
 - `test_screenshots` writes `editor.png`, `share.png`, `locked.png`,
   `locked-error.png`, `play.png` and `found.png` to `/home/claude/work/shots`
   (override with `SHOTS_DIR=`).
+- `test_puzzle_screenshots` writes `wordle-mid.png`, `wordle-failed.png`,
+  `question.png`, `question-wrong-hint.png`, `unlocked.png`,
+  `found-with-puzzle.png`, `finished-custom.png`, `stuck.png`,
+  `editor-wordle.png` and `editor-question.png` to `/home/claude/work/shots2`
+  (override with `SHOTS2_DIR=`).

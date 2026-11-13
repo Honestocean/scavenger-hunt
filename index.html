@@ -79,6 +79,58 @@
   }
   .overlay button { flex: 0; padding: 14px 28px; margin-top: 20px; min-width: 180px; }
 
+  /* Puzzles (shown before a clue is revealed) */
+  #puzzle, #stuck { justify-content: flex-start; padding: 14px 12px; }
+  #stuck { z-index: 2100; padding-top: 40px; }
+  #puzzle h1, #stuck h1 { font-size: 26px; margin: 0 0 2px; }
+  #puzzle p, #stuck p { font-size: 15px; margin: 2px 0 8px; }
+  #puzzle-q, #puzzle-w { width: 100%; display: flex; flex-direction: column; align-items: center; }
+  #puzzle-question { font-size: 18px; padding: 10px 14px; margin-top: 0; white-space: pre-wrap; overflow-wrap: anywhere; }
+  #puzzle-hint { font-size: 15px; margin-top: 6px; color: #ffe9a8; max-width: 480px; overflow-wrap: anywhere; }
+  #puzzle-form, #stuck-form { display: flex; flex-direction: column; align-items: center; width: 100%; }
+  #puzzle-wrong, #stuck-err { color: var(--warn); margin: 4px 0 0; font-size: 16px; font-weight: 600; }
+  #puzzle-answer, #stuck-code {
+    width: 100%; max-width: 320px; padding: 12px; border: 0; border-radius: 10px;
+    font-size: 20px; text-align: center; background: rgba(255,255,255,.14); color: #fff; margin-top: 6px;
+  }
+  #puzzle-form button, #stuck-form button { margin-top: 10px; }
+  .overlay button.quiet {
+    background: transparent; color: #fff; opacity: .75; font-weight: 500; font-size: 14px;
+    text-decoration: underline; min-width: 0; padding: 12px 18px; margin-top: 8px;
+  }
+  #btn-stuck {
+    flex: 0 0 auto; background: transparent; opacity: .7; font-weight: 500; font-size: 13px;
+    text-decoration: underline; padding: 12px 8px;
+  }
+  #unlocked-clue, #found-clue { white-space: pre-wrap; overflow-wrap: anywhere; }
+  #finished-sub { white-space: pre-wrap; overflow-wrap: anywhere; }
+
+  /* Wordle */
+  #wordle-grid {
+    display: grid; grid-template-columns: repeat(var(--n, 5), minmax(0, 50px));
+    gap: 5px; justify-content: center; width: 100%; margin-top: 4px;
+  }
+  #wordle-grid .tile {
+    aspect-ratio: 1; display: flex; align-items: center; justify-content: center;
+    border: 2px solid rgba(255,255,255,.3); border-radius: 6px;
+    font-size: 26px; font-weight: 700; text-transform: uppercase; line-height: 1;
+  }
+  #wordle-grid .tile.filled { border-color: rgba(255,255,255,.7); }
+  #wordle-grid .tile.hit, #wordle-keys button.hit { background: #3aa76d; border-color: #3aa76d; color: #fff; }
+  #wordle-grid .tile.near, #wordle-keys button.near { background: #c9a227; border-color: #c9a227; color: #fff; }
+  #wordle-grid .tile.miss { background: #3a3f4b; border-color: #3a3f4b; color: #fff; }
+  #wordle-keys button.miss { background: #23262e; color: #8a8f99; }
+  #wordle-msg { min-height: 24px; margin: 6px 0 0; font-size: 16px; font-weight: 600; color: var(--warn); }
+  #puzzle #btn-wordle-retry { margin-top: 6px; padding: 12px 28px; }
+  #wordle-keys { width: 100%; max-width: 480px; margin-top: 8px; display: flex; flex-direction: column; gap: 6px; }
+  #wordle-keys .krow { display: flex; gap: 5px; justify-content: center; }
+  #wordle-keys button {
+    flex: 1 1 0; min-width: 0; max-width: 44px; height: 52px; margin: 0; padding: 0;
+    border-radius: 6px; background: #6b7280; color: #fff; font-size: 18px; font-weight: 700;
+    text-transform: uppercase; user-select: none; -webkit-user-select: none;
+  }
+  #wordle-keys button.wide { flex: 1.6 1 0; max-width: 70px; font-size: 13px; }
+
   /* Play mode */
   #play-clue { font-size: 18px; margin: 4px 0 6px; }
   #play-progress { font-size: 12px; opacity: .7; text-transform: uppercase; letter-spacing: .06em; }
@@ -90,9 +142,18 @@
   #editor-panel .btnrow { flex: 0 0 auto; }
   #editor-panel .btnrow button { padding: 12px 6px; font-size: 14px; }
   #btn-exit-editor { flex: 0 0 auto; padding-left: 14px !important; padding-right: 14px !important; }
-  #editor-panel input[type=text] {
+  #editor-panel input[type=text], #editor-panel textarea, #editor-panel select {
     width: 100%; padding: 10px; border: 0; border-radius: 8px;
-    background: #2e2e4e; color: #eee; font-size: 15px; margin-top: 4px;
+    background: #2e2e4e; color: #eee; font-size: 15px; margin-top: 4px; font-family: inherit;
+  }
+  #editor-panel textarea { resize: none; display: block; }
+  #edit-wordle-word { text-transform: uppercase; letter-spacing: .15em; }
+  #edit-wordle-word::placeholder { text-transform: none; letter-spacing: normal; }
+  #pin-warn, #edit-error { color: var(--warn); font-weight: 600; font-size: 13px; margin-top: 6px; }
+  #edit-error { flex: 0 0 auto; }
+  #clue-list .badge {
+    flex: 0 0 auto; font-size: 11px; font-weight: 700; padding: 2px 6px; border-radius: 8px;
+    background: rgba(78, 204, 163, .22); color: var(--accent); white-space: nowrap;
   }
   #clue-list { margin: 8px 0 0; padding: 0; list-style: none; }
   #clue-list li {
@@ -162,19 +223,32 @@
   <div class="btnrow">
     <button id="btn-play-center" class="btn-center">Centre on me</button>
     <button id="btn-play-reset" class="danger">Restart hunt</button>
+    <button id="btn-stuck" hidden>Stuck?</button>
   </div>
 </div>
 
 <!-- ============ EDITOR MODE ============ -->
 <div class="panel bottom" id="editor-panel" hidden>
   <div id="editor-scroll">
-  <div class="hint">Tap the map where a clue's answer is hidden. Drag a pin to fine-tune it.</div>
+  <div class="hint">Tap the map where a clue's answer is hidden. Drag a pin to fine-tune it. Or stand on the spot and use your GPS position:</div>
+  <div class="btnrow">
+    <button id="btn-pin-here" type="button">📍 New pin where I am</button>
+    <button id="btn-move-here" type="button" disabled>Move pin to me</button>
+  </div>
+  <div id="pin-warn" hidden></div>
   <label>Hunt title
     <input type="text" id="edit-title" placeholder="e.g. Garden treasure hunt" maxlength="60">
   </label>
   <label>Password (optional — players must type it to start)
     <input type="text" id="edit-password" placeholder="Leave blank for no password" maxlength="60"
            autocomplete="off" autocapitalize="none" spellcheck="false">
+  </label>
+  <label>Skip code (optional — lets a stuck player past a puzzle or a location)
+    <input type="text" id="edit-skip" placeholder="Leave blank for no skip code" maxlength="60"
+           autocomplete="off" autocapitalize="none" spellcheck="false">
+  </label>
+  <label>Final message (optional — shown when the last spot is found)
+    <textarea id="edit-end" rows="2" maxlength="300" placeholder="e.g. You found every clue. Well done!"></textarea>
   </label>
   <ul id="clue-list"></ul>
   <div id="clue-text-wrap" hidden>
@@ -184,12 +258,39 @@
     <label>How close players must get: <b><span id="edit-radius-label">25</span> m</b>
       <input type="range" id="edit-radius" min="10" max="100" step="5" value="25">
     </label>
+    <label>Puzzle to unlock this clue
+      <select id="edit-puzzle-type">
+        <option value="none">No puzzle</option>
+        <option value="w">Wordle (guess a secret word)</option>
+        <option value="q">Question / riddle</option>
+      </select>
+    </label>
+    <div class="hint">Players solve the puzzle first, then see the clue text, then go to the pin.</div>
+    <div id="edit-wordle-wrap" hidden>
+      <label>Secret word (3–8 letters, A–Z only)
+        <input type="text" id="edit-wordle-word" placeholder="e.g. BEACH" maxlength="12"
+               autocomplete="off" autocapitalize="characters" autocorrect="off" spellcheck="false">
+      </label>
+    </div>
+    <div id="edit-q-wrap" hidden>
+      <label>Question or riddle
+        <input type="text" id="edit-q-text" placeholder="e.g. What gets wetter the more it dries?" maxlength="300">
+      </label>
+      <label>Accepted answers (separate alternatives with | )
+        <input type="text" id="edit-q-answers" placeholder="e.g. towel|tea towel" maxlength="300"
+               autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+      </label>
+      <label>Hint (optional — players can ask to see it)
+        <input type="text" id="edit-q-hint" placeholder="Leave blank for no hint" maxlength="300">
+      </label>
+    </div>
   </div>
   <div class="checkrow">
     <input type="checkbox" id="edit-showdist" checked>
     <label for="edit-showdist">Show live distance to players (easier)</label>
   </div>
   </div>
+  <div id="edit-error" hidden></div>
   <div class="btnrow">
     <button id="btn-share" class="primary">Get links</button>
     <button id="btn-edit-center" class="btn-center">Centre on me</button>
@@ -209,6 +310,48 @@
   <p id="found-sub">Here's your next clue:</p>
   <div class="cluecard" id="found-clue"></div>
   <button class="primary" id="btn-next">Let's go!</button>
+</div>
+
+<div class="overlay" id="puzzle" hidden>
+  <h1>🧩 Puzzle time!</h1>
+  <p id="puzzle-sub"></p>
+  <div id="puzzle-q" hidden>
+    <div class="cluecard" id="puzzle-question"></div>
+    <div id="puzzle-hint" hidden></div>
+    <form id="puzzle-form">
+      <div id="puzzle-wrong" hidden>Not quite — try again</div>
+      <input type="text" id="puzzle-answer" placeholder="Your answer" maxlength="100"
+             autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+      <button class="primary" id="btn-puzzle-submit" type="submit">Check answer</button>
+    </form>
+    <button class="quiet" id="btn-hint" type="button" hidden>💡 Need a hint?</button>
+  </div>
+  <div id="puzzle-w" hidden>
+    <div id="wordle-grid"></div>
+    <div id="wordle-msg" role="status"></div>
+    <button class="primary" id="btn-wordle-retry" type="button" hidden>Try again</button>
+    <div id="wordle-keys"></div>
+  </div>
+  <button class="quiet" id="btn-stuck-puzzle" type="button" hidden>Stuck?</button>
+</div>
+
+<div class="overlay" id="unlocked" hidden>
+  <h1>🔓 Unlocked!</h1>
+  <p>Here's your clue:</p>
+  <div class="cluecard" id="unlocked-clue"></div>
+  <button class="primary" id="btn-unlocked-go">Let's go!</button>
+</div>
+
+<div class="overlay" id="stuck" hidden>
+  <h1>Stuck?</h1>
+  <p>Ask the organiser for the skip code, then type it here.</p>
+  <form id="stuck-form">
+    <div id="stuck-err" hidden>That's not the code — nothing has changed.</div>
+    <input type="text" id="stuck-code" placeholder="Skip code" maxlength="60"
+           autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false">
+    <button class="primary" id="btn-stuck-go" type="submit">Use code</button>
+    <button id="btn-stuck-cancel" type="button">Cancel</button>
+  </form>
 </div>
 
 <div class="overlay" id="finished" hidden>
@@ -330,13 +473,61 @@ function clampRadius(r) {
   if (!isFinite(r)) return DEFAULT_RADIUS_M;
   return Math.min(MAX_RADIUS_M, Math.max(MIN_RADIUS_M, Math.round(r)));
 }
+
+// --- Puzzles: solved before a clue's text is revealed ---
+const WORDLE_MIN = 3, WORDLE_MAX = 8, WORDLE_ROWS = 6;
+const MAX_PUZZLE_TEXT = 300, MAX_END_TEXT = 300, MAX_SKIP_TEXT = 60;
+
+// Typed answers are compared forgivingly: case, accents-as-typed (NFKC), punctuation,
+// stray spaces and a leading "the"/"a"/"an" don't matter.
+function normaliseAnswer(s) {
+  s = String(s).normalize("NFKC").toLowerCase()
+    .replace(/['’‘`´.]/g, "")            // don't / dont, St. / St
+    .replace(/[^\p{L}\p{M}\p{N}]+/gu, " ")    // any other punctuation acts as a space
+    .trim();
+  const bare = s.replace(/^(the|an|a) /, "");
+  return bare || s;
+}
+function answerList(a) { return String(a).split("|").map(normaliseAnswer).filter(x => x); }
+function answerMatches(typed, a) {
+  const t = normaliseAnswer(typed);
+  return !!t && answerList(a).includes(t);
+}
+function cleanText(v, max) { return typeof v === "string" ? v.trim().slice(0, max) : ""; }
+// Returns a valid puzzle or null — bad puzzle data must never block a clue.
+function cleanPuzzle(p) {
+  try {
+    if (!p || typeof p !== "object" || Array.isArray(p)) return null;
+    if (p.k === "w") {
+      if (typeof p.a !== "string") return null;
+      const a = p.a.trim().toUpperCase();
+      return new RegExp("^[A-Z]{" + WORDLE_MIN + "," + WORDLE_MAX + "}$").test(a) ? { k: "w", a } : null;
+    }
+    if (p.k === "q") {
+      const q = cleanText(p.q, MAX_PUZZLE_TEXT), a = cleanText(p.a, MAX_PUZZLE_TEXT), h = cleanText(p.h, MAX_PUZZLE_TEXT);
+      if (!q || !answerList(a).length) return null;
+      const out = { k: "q", q, a };
+      if (h) out.h = h;
+      return out;
+    }
+  } catch { /* fall through */ }
+  return null;
+}
 function cleanHunt(d) { // validate anything that came out of a URL
   if (!d || !Array.isArray(d.clues)) throw new Error("no clues");
   const clues = d.clues
     .filter(c => c && typeof c === "object" && c.lat !== null && c.lng !== null &&
                  Math.abs(Number(c.lat)) <= 90 && Math.abs(Number(c.lng)) <= 180)
-    .map(c => ({ t: String(c.t || "").slice(0, 500), lat: Number(c.lat), lng: Number(c.lng), r: clampRadius(c.r) }));
-  return { title: d.title ? String(d.title).slice(0, 100) : "", showDist: d.showDist !== false, clues };
+    .map(c => {
+      const out = { t: String(c.t || "").slice(0, 500), lat: Number(c.lat), lng: Number(c.lng), r: clampRadius(c.r) };
+      const p = cleanPuzzle(c.p);
+      if (p) out.p = p;
+      return out;
+    });
+  return {
+    title: d.title ? String(d.title).slice(0, 100) : "", showDist: d.showDist !== false, clues,
+    skip: cleanText(d.skip, MAX_SKIP_TEXT), end: cleanText(d.end, MAX_END_TEXT)
+  };
 }
 
 // --- Mode from URL hash: #hunt=… plays, #edit (or #edit=…) edits, else GPS test ---
@@ -486,19 +677,10 @@ function setTarget(lat, lng, radius) {
 }
 
 let progress = 0, progressKey = null;
+let playFound = null; // set by startPlay: marks the current clue as found
 function onArrival() {
   if (mode === "test") { $("arrived").hidden = false; return; }
-  if (mode !== "play") return;
-  // Found clue at progress index; advance and persist.
-  progress++;
-  storeSet(progressKey, String(progress));
-  if (progress >= hunt.clues.length) {
-    target = null;
-    $("finished").hidden = false;
-  } else {
-    $("found-clue").textContent = hunt.clues[progress].t;
-    $("found").hidden = false;
-  }
+  if (mode === "play" && playFound) playFound();
 }
 
 // ================= PASSWORD GATE =================
@@ -578,62 +760,397 @@ function startTest() {
 }
 
 // ================= PLAY MODE =================
+// For each clue in order: [puzzle → "unlocked" card →] clue text + arrival → "found" card.
+// Everything that decides the stage is saved, so a reload lands on the same stage.
 function startPlay(data) {
   hunt = data;
+  const clues = hunt.clues;
   $("play-panel").hidden = false;
   document.title = hunt.title ? hunt.title + " — Scavenger Hunt" : "Scavenger Hunt";
   $("coords-row").style.display = "none"; // less clutter for players
   if (!hunt.showDist) $("play-dist-row").style.display = "none";
+  if (hunt.end) $("finished-sub").textContent = hunt.end;
+  $("btn-stuck").hidden = $("btn-stuck-puzzle").hidden = !hunt.skip;
 
   progressKey = payloadKey("hunt-progress-", payload);
-  progress = Math.min(parseInt(storeGet(progressKey) || "0", 10) || 0, hunt.clues.length);
+  progress = Math.max(0, Math.min(parseInt(storeGet(progressKey) || "0", 10) || 0, clues.length));
 
-  function showCurrentClue() {
-    if (progress >= hunt.clues.length) {
-      target = null;
+  // Puzzle progress: s = solved, u = "unlocked" card dismissed, h = hint revealed
+  // (each a map of clue index → 1), w = Wordle guesses per clue index.
+  const puzzleKey = payloadKey("hunt-puzzle-", payload);
+  const pz = { s: {}, u: {}, h: {}, w: {} };
+  try {
+    const saved = JSON.parse(storeGet(puzzleKey) || "null");
+    if (saved && typeof saved === "object" && !Array.isArray(saved)) {
+      for (const f of ["s", "u", "h", "w"]) {
+        const m = saved[f];
+        if (!m || typeof m !== "object" || Array.isArray(m)) continue;
+        clues.forEach((c, i) => {
+          if (!c.p || !Object.prototype.hasOwnProperty.call(m, i)) return;
+          if (f !== "w") { if (m[i] === 1) pz[f][i] = 1; return; }
+          const w = cleanWordleState(m[i], c.p);
+          if (w) pz.w[i] = w;
+        });
+      }
+    }
+  } catch { /* unreadable saved state: start the puzzles afresh */ }
+  function savePuzzles() { storeSet(puzzleKey, JSON.stringify(pz)); }
+
+  const LOCKED_TEXT = "🧩 Solve the puzzle to reveal this clue.";
+  const puzzlePending = i => i < clues.length && !!clues[i].p && !pz.s[i];
+  let stage = ""; // "puzzle" | "unlocked" | "hunting" | "found" | "finished"
+
+  function noTarget() {
+    target = null;
+    fixesInsideRadius = 0;
+    $("play-distance").textContent = "—";
+  }
+
+  function showStage() {
+    for (const id of ["puzzle", "unlocked", "found", "stuck"]) $(id).hidden = true;
+    $("unlocked-clue").textContent = "";
+    $("found-clue").textContent = "";
+    if (progress >= clues.length) {
+      stage = "finished";
+      noTarget();
       $("play-progress").textContent = "Finished";
       $("play-clue").textContent = "🏆 " + (hunt.title || "Hunt") + " complete!";
+      $("btn-stuck").hidden = true;
       $("finished").hidden = false;
       return;
     }
-    const c = hunt.clues[progress];
-    $("play-progress").textContent = "Clue " + (progress + 1) + " of " + hunt.clues.length;
+    const c = clues[progress];
+    $("play-progress").textContent = "Clue " + (progress + 1) + " of " + clues.length;
+    if (puzzlePending(progress)) {
+      stage = "puzzle";
+      noTarget();
+      $("play-clue").textContent = LOCKED_TEXT;
+      openPuzzle(progress);
+      return;
+    }
+    if (c.p && !pz.u[progress]) {
+      stage = "unlocked";
+      noTarget();
+      $("play-clue").textContent = LOCKED_TEXT;
+      $("unlocked-clue").textContent = c.t;
+      $("unlocked").hidden = false;
+      return;
+    }
+    stage = "hunting";
     $("play-clue").textContent = c.t;
     setTarget(c.lat, c.lng, c.r);
     updateDistance();
     // No target marker in play mode — finding the spot is the game.
   }
-  showCurrentClue();
+
+  // The current clue's spot has been reached (by GPS, or with the skip code).
+  playFound = function () {
+    if (stage !== "hunting") return;
+    $("stuck").hidden = true; // arrived while the skip-code screen was open
+    progress++;
+    storeSet(progressKey, String(progress));
+    if (progress >= clues.length) { showStage(); return; }
+    stage = "found";
+    noTarget();
+    if (puzzlePending(progress)) { // the next clue stays secret until its puzzle is solved
+      $("found-sub").textContent = "There's a puzzle to solve before your next clue.";
+      $("found-clue").textContent = "";
+      $("found-clue").hidden = true;
+      $("btn-next").textContent = "Solve the puzzle";
+    } else {
+      $("found-sub").textContent = "Here's your next clue:";
+      $("found-clue").textContent = clues[progress].t;
+      $("found-clue").hidden = false;
+      $("btn-next").textContent = "Let's go!";
+    }
+    $("found").hidden = false;
+  };
+
+  // Saved at once (a reload lands on the "unlocked" card); `delay` only holds the
+  // screen for a moment so a winning Wordle row can be seen.
+  function puzzleSolved(i, delay) {
+    if (i !== progress || !puzzlePending(i)) return;
+    pz.s[i] = 1;
+    delete pz.w[i];
+    savePuzzles();
+    if (delay) setTimeout(() => { if (stage === "puzzle") showStage(); }, delay);
+    else showStage();
+  }
+
+  // ---- Puzzle overlay ----
+  function openPuzzle(i) {
+    const p = clues[i].p;
+    const which = "clue " + (i + 1) + " of " + clues.length;
+    $("puzzle-q").hidden = p.k !== "q";
+    $("puzzle-w").hidden = p.k !== "w";
+    if (p.k === "q") {
+      $("puzzle-sub").textContent = "Answer this to unlock " + which + ".";
+      $("puzzle-question").textContent = p.q;
+      $("puzzle-answer").value = "";
+      $("puzzle-wrong").hidden = true;
+      $("puzzle-hint").textContent = "";
+      $("puzzle-hint").hidden = true;
+      $("btn-hint").hidden = !p.h;
+      if (p.h && pz.h[i]) revealHint(i);
+    } else {
+      $("puzzle-sub").textContent = "Guess the " + p.a.length + "-letter word to unlock " + which + ".";
+      openWordle(i);
+    }
+    $("puzzle").hidden = false;
+    $("puzzle").scrollTop = 0;
+  }
+  function revealHint(i) {
+    $("puzzle-hint").textContent = "💡 Hint: " + clues[i].p.h;
+    $("puzzle-hint").hidden = false;
+    $("btn-hint").hidden = true;
+  }
+  $("btn-hint").addEventListener("click", () => {
+    if (stage !== "puzzle" || !clues[progress].p.h) return;
+    pz.h[progress] = 1;
+    savePuzzles();
+    revealHint(progress);
+  });
+  $("puzzle-form").addEventListener("submit", ev => {
+    ev.preventDefault();
+    if (stage !== "puzzle" || clues[progress].p.k !== "q") return;
+    const typed = $("puzzle-answer").value;
+    if (answerMatches(typed, clues[progress].p.a)) { puzzleSolved(progress); return; }
+    $("puzzle-wrong").hidden = !typed.trim();
+    $("puzzle-answer").focus();
+  });
+  $("puzzle-answer").addEventListener("input", () => { $("puzzle-wrong").hidden = true; });
+
+  // ---- Wordle ----
+  let wIndex = -1, wState = null, wCur = "", wLocked = false;
+  const wAnswer = () => clues[wIndex].p.a.toLowerCase();
+  const wFailed = () => wState.g.length >= WORDLE_ROWS;
+  const WORDLE_FAIL_TEXT = "Not this time — but you're not out! Have another six guesses.";
+
+  // Our own keyboard: no soft keyboard to cover the grid, autocorrect or fight with.
+  [["q", "w", "e", "r", "t", "y", "u", "i", "o", "p"], ["a", "s", "d", "f", "g", "h", "j", "k", "l"],
+   ["enter", "z", "x", "c", "v", "b", "n", "m", "back"]].forEach(keys => {
+    const row = document.createElement("div");
+    row.className = "krow";
+    keys.forEach(k => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.dataset.key = k;
+      b.textContent = k === "enter" ? "Enter" : k === "back" ? "⌫" : k;
+      if (k.length > 1) { b.className = "wide"; b.setAttribute("aria-label", k === "enter" ? "Enter" : "Delete letter"); }
+      b.addEventListener("click", () => { b.blur(); wordleKey(k); });
+      row.appendChild(b);
+    });
+    $("wordle-keys").appendChild(row);
+  });
+
+  function openWordle(i) {
+    wIndex = i;
+    wState = pz.w[i] || { g: [], k: {} };
+    wCur = "";
+    wLocked = false;
+    const n = clues[i].p.a.length;
+    const grid = $("wordle-grid");
+    grid.textContent = "";
+    grid.style.setProperty("--n", n);
+    for (let t = 0; t < WORDLE_ROWS * n; t++) {
+      const tile = document.createElement("div");
+      tile.className = "tile";
+      grid.appendChild(tile);
+    }
+    $("wordle-msg").textContent = wFailed() ? WORDLE_FAIL_TEXT : "";
+    renderWordle();
+  }
+
+  function renderWordle() {
+    const answer = wAnswer(), n = answer.length, tiles = $("wordle-grid").children;
+    for (let r = 0; r < WORDLE_ROWS; r++) {
+      const played = r < wState.g.length;
+      const word = played ? wState.g[r] : (r === wState.g.length ? wCur : "");
+      const score = played ? scoreGuess(word, answer) : null;
+      for (let c = 0; c < n; c++) {
+        const tile = tiles[r * n + c];
+        tile.textContent = word[c] || "";
+        tile.className = "tile" + (score ? " " + score[c] : word[c] ? " filled" : "");
+      }
+    }
+    $("wordle-keys").querySelectorAll("button").forEach(b => {
+      const st = wState.k[b.dataset.key];
+      b.classList.toggle("hit", st === "hit");
+      b.classList.toggle("near", st === "near");
+      b.classList.toggle("miss", st === "miss");
+    });
+    $("btn-wordle-retry").hidden = !wFailed();
+  }
+
+  function wordleRetry() { // a fresh grid; the keyboard keeps what has been learned
+    if (stage !== "puzzle" || wIndex !== progress || wLocked || !wFailed()) return;
+    wState.g = [];
+    wCur = "";
+    pz.w[wIndex] = wState;
+    savePuzzles();
+    $("wordle-msg").textContent = "";
+    renderWordle();
+  }
+  $("btn-wordle-retry").addEventListener("click", wordleRetry);
+
+  function wordleKey(k) {
+    if (stage !== "puzzle" || wIndex !== progress || !clues[progress].p || clues[progress].p.k !== "w" || wLocked) return;
+    if (wFailed()) return; // only "Try again" moves on from a full grid
+    const answer = wAnswer(), n = answer.length;
+    let msg = "";
+    if (k === "back") {
+      wCur = wCur.slice(0, -1);
+    } else if (k === "enter") {
+      if (wCur.length < n) {
+        msg = "Not enough letters — the word has " + n + ".";
+      } else {
+        const guess = wCur;
+        wCur = "";
+        scoreGuess(guess, answer).forEach((st, c) => {
+          const ch = guess[c];
+          if ((WORDLE_RANK[st] || 0) > (WORDLE_RANK[wState.k[ch]] || 0)) wState.k[ch] = st;
+        });
+        wState.g.push(guess);
+        if (guess === answer) {
+          wLocked = true;
+          renderWordle();
+          $("wordle-msg").textContent = "";
+          puzzleSolved(wIndex, 700);
+          return;
+        }
+        pz.w[wIndex] = wState;
+        savePuzzles();
+        if (wFailed()) msg = WORDLE_FAIL_TEXT;
+      }
+    } else if (/^[a-z]$/.test(k)) {
+      if (wCur.length < n) wCur += k;
+    } else {
+      return;
+    }
+    $("wordle-msg").textContent = msg;
+    renderWordle();
+  }
+  // Physical keyboards work too (handy when trying a hunt out on a laptop).
+  document.addEventListener("keydown", ev => {
+    if (stage !== "puzzle" || $("puzzle-w").hidden || !$("stuck").hidden) return;
+    if (ev.ctrlKey || ev.metaKey || ev.altKey) return;
+    const k = ev.key === "Enter" ? "enter" : ev.key === "Backspace" ? "back"
+            : /^[a-zA-Z]$/.test(ev.key) ? ev.key.toLowerCase() : "";
+    if (!k || wFailed()) return; // leave Enter alone so it can press "Try again"
+    ev.preventDefault();
+    wordleKey(k);
+  });
+
+  // ---- "Stuck?": the organiser's skip code gets the player past whatever is in the way ----
+  function openStuck() {
+    if (!hunt.skip || (stage !== "puzzle" && stage !== "hunting")) return;
+    $("stuck-code").value = "";
+    $("stuck-err").hidden = true;
+    $("stuck").hidden = false;
+    $("stuck").scrollTop = 0;
+    $("stuck-code").focus();
+  }
+  $("btn-stuck").addEventListener("click", openStuck);
+  $("btn-stuck-puzzle").addEventListener("click", openStuck);
+  $("btn-stuck-cancel").addEventListener("click", () => { $("stuck").hidden = true; });
+  $("stuck-code").addEventListener("input", () => { $("stuck-err").hidden = true; });
+  $("stuck-form").addEventListener("submit", ev => {
+    ev.preventDefault();
+    if (!hunt.skip || normalisePassword($("stuck-code").value) !== normalisePassword(hunt.skip)) {
+      $("stuck-err").hidden = false;
+      $("stuck-code").focus();
+      return;
+    }
+    $("stuck").hidden = true;
+    $("stuck-code").blur(); // put the phone keyboard away
+    if (stage === "puzzle") puzzleSolved(progress);
+    else if (stage === "hunting") playFound();
+    if (stage === "puzzle") showStage(); // a Wordle solved a moment ago: don't wait for its pause
+  });
+
+  $("btn-unlocked-go").addEventListener("click", () => {
+    if (stage !== "unlocked") return;
+    pz.u[progress] = 1;
+    savePuzzles();
+    showStage();
+  });
 
   $("btn-next").addEventListener("click", () => {
     $("found").hidden = true;
-    showCurrentClue();
+    showStage();
   });
+
+  showStage();
 
   // Two-tap restart so a stray tap can't wipe progress (no confirm() — it blocks the tab).
   let resetArmed = false, resetTimer = null;
   function doReset() {
     storeDel(progressKey);
+    storeDel(puzzleKey);
     location.reload();
   }
-  $("btn-play-reset").addEventListener("click", () => {
-    if (resetArmed) { doReset(); return; }
-    resetArmed = true;
-    $("btn-play-reset").textContent = "Tap again to restart";
-    clearTimeout(resetTimer);
-    resetTimer = setTimeout(() => {
-      resetArmed = false;
-      $("btn-play-reset").textContent = "Restart hunt";
-    }, 3000);
-  });
-  $("btn-finish-reset").addEventListener("click", doReset);
+  function twoTapReset(id, label, armedLabel) {
+    $(id).addEventListener("click", () => {
+      if (resetArmed) { doReset(); return; }
+      resetArmed = true;
+      $(id).textContent = armedLabel;
+      clearTimeout(resetTimer);
+      resetTimer = setTimeout(() => {
+        resetArmed = false;
+        $(id).textContent = label;
+      }, 3000);
+    });
+  }
+  twoTapReset("btn-play-reset", "Restart hunt", "Tap again to restart");
+  twoTapReset("btn-finish-reset", "Play again", "Tap again to start over");
+}
+
+// --- Wordle helpers ---
+const WORDLE_RANK = { miss: 1, near: 2, hit: 3 };
+// Standard scoring: exact matches first, then each remaining answer letter can
+// make at most one misplaced guess letter "near".
+function scoreGuess(guess, answer) {
+  const res = [], left = {};
+  for (let i = 0; i < answer.length; i++) {
+    if (guess[i] === answer[i]) res[i] = "hit";
+    else { res[i] = "miss"; left[answer[i]] = (left[answer[i]] || 0) + 1; }
+  }
+  for (let i = 0; i < answer.length; i++) {
+    if (res[i] !== "hit" && left[guess[i]] > 0) { res[i] = "near"; left[guess[i]]--; }
+  }
+  return res;
+}
+// Saved Wordle progress for one clue: g = guesses in the current round, k = best
+// colour seen per keyboard letter. Anything that doesn't fit the puzzle is dropped.
+function cleanWordleState(w, p) {
+  if (!w || typeof w !== "object" || !p || p.k !== "w") return null;
+  const answer = p.a.toLowerCase();
+  const fits = new RegExp("^[a-z]{" + answer.length + "}$");
+  const g = (Array.isArray(w.g) ? w.g : [])
+    .filter(x => typeof x === "string" && fits.test(x) && x !== answer).slice(0, WORDLE_ROWS);
+  const k = {};
+  if (w.k && typeof w.k === "object" && !Array.isArray(w.k)) {
+    for (const ch of "abcdefghijklmnopqrstuvwxyz") {
+      if (Object.prototype.hasOwnProperty.call(w.k, ch) && WORDLE_RANK[w.k[ch]]) k[ch] = w.k[ch];
+    }
+  }
+  return { g, k };
 }
 
 // ================= EDITOR MODE =================
 function startEdit(data, password) {
   $("editor-panel").hidden = false;
   document.title = "Hunt editor — Scavenger Hunt";
-  const editClues = data ? data.clues : [];
+  // Each clue carries its puzzle as editable fields (pk = type, pw = Wordle word,
+  // pq / pa / ph = question, answers, hint) so switching type loses nothing typed.
+  function newClue(lat, lng) {
+    return { t: "", lat: +lat.toFixed(6), lng: +lng.toFixed(6), r: DEFAULT_RADIUS_M, pk: "none", pw: "", pq: "", pa: "", ph: "" };
+  }
+  const editClues = (data ? data.clues : []).map(c => {
+    const p = c.p || {};
+    return { t: c.t, lat: c.lat, lng: c.lng, r: c.r, pk: c.p ? p.k : "none",
+             pw: p.k === "w" ? p.a : "", pq: p.k === "q" ? p.q : "", pa: p.k === "q" ? p.a : "", ph: (p.k === "q" && p.h) || "" };
+  });
   let selected = -1;
   const markers = [], circles = [];
 
@@ -642,6 +1159,8 @@ function startEdit(data, password) {
     $("edit-title").value = data.title;
     $("edit-showdist").checked = data.showDist;
     $("edit-password").value = password || "";
+    $("edit-skip").value = data.skip;
+    $("edit-end").value = data.end;
   }
   if (!cryptoAvailable) {
     $("edit-password").disabled = true;
@@ -667,10 +1186,16 @@ function startEdit(data, password) {
       txt.className = "txt"; txt.textContent = c.t || "(no clue text yet)";
       const rad = document.createElement("span");
       rad.className = "rad"; rad.textContent = c.r + " m";
+      let badge = null;
+      if (c.pk === "w" || c.pk === "q") {
+        badge = document.createElement("span");
+        badge.className = "badge";
+        badge.textContent = c.pk === "w" ? "Wordle" : "Question";
+      }
       const del = document.createElement("button");
       del.className = "del"; del.textContent = "✕";
       del.addEventListener("click", ev => { ev.stopPropagation(); removeClue(i); });
-      li.append(num, txt, rad, del);
+      li.append(num, txt, ...(badge ? [badge] : []), rad, del);
       li.addEventListener("click", () => selectClue(i));
       ul.appendChild(li);
     });
@@ -680,7 +1205,16 @@ function startEdit(data, password) {
       $("edit-clue-text").value = editClues[selected].t || "";
       $("edit-radius").value = editClues[selected].r;
       $("edit-radius-label").textContent = editClues[selected].r;
+      const c = editClues[selected];
+      $("edit-puzzle-type").value = c.pk;
+      $("edit-wordle-word").value = c.pw;
+      $("edit-q-text").value = c.pq;
+      $("edit-q-answers").value = c.pa;
+      $("edit-q-hint").value = c.ph;
+      $("edit-wordle-wrap").hidden = c.pk !== "w";
+      $("edit-q-wrap").hidden = c.pk !== "q";
     }
+    $("btn-move-here").disabled = selected < 0;
     circles.forEach((c, i) => c.setStyle(circleStyle(i)));
   }
 
@@ -718,11 +1252,78 @@ function startEdit(data, password) {
   }
 
   map.on("click", e => {
-    editClues.push({ t: "", lat: +e.latlng.lat.toFixed(6), lng: +e.latlng.lng.toFixed(6), r: DEFAULT_RADIUS_M });
+    editClues.push(newClue(e.latlng.lat, e.latlng.lng));
     selected = editClues.length - 1;
     redrawMarkers();
     renderList();
   });
+
+  // ---- Pins from the organiser's own GPS position (standing on the spot) ----
+  const PIN_WARN_ACCURACY_M = 30;
+  function gpsSpot() { // null when there is no fix; warns (but still answers) when the fix is rough
+    if (!myPos) {
+      $("pin-warn").textContent = "No GPS fix yet — wait until the GPS line at the top shows a fix, then try again.";
+      $("pin-warn").hidden = false;
+      return null;
+    }
+    const rough = myPos.accuracy > PIN_WARN_ACCURACY_M;
+    $("pin-warn").textContent = rough
+      ? "⚠️ GPS is only accurate to ±" + Math.round(myPos.accuracy) + " m right now, so this pin may be off. Check it on the map, or wait for a better fix and tap “Move pin to me”."
+      : "";
+    $("pin-warn").hidden = !rough;
+    return { lat: myPos.lat, lng: myPos.lng };
+  }
+  $("btn-pin-here").addEventListener("click", () => {
+    const here = gpsSpot();
+    if (!here) return;
+    editClues.push(newClue(here.lat, here.lng));
+    selected = editClues.length - 1;
+    redrawMarkers();
+    renderList();
+    map.panTo([here.lat, here.lng]);
+  });
+  $("btn-move-here").addEventListener("click", () => {
+    if (selected < 0 || !editClues[selected]) return;
+    const here = gpsSpot();
+    if (!here) return;
+    const c = editClues[selected];
+    c.lat = +here.lat.toFixed(6);
+    c.lng = +here.lng.toFixed(6);
+    if (markers[selected]) markers[selected].setLatLng([c.lat, c.lng]);
+    if (circles[selected]) circles[selected].setLatLng([c.lat, c.lng]);
+    map.panTo([c.lat, c.lng]);
+  });
+
+  // ---- Per-clue puzzle fields ----
+  $("edit-puzzle-type").addEventListener("change", () => {
+    if (selected < 0) return;
+    const v = $("edit-puzzle-type").value;
+    editClues[selected].pk = v === "w" || v === "q" ? v : "none";
+    renderList();
+  });
+  [["edit-wordle-word", "pw"], ["edit-q-text", "pq"], ["edit-q-answers", "pa"], ["edit-q-hint", "ph"]].forEach(([id, field]) => {
+    $(id).addEventListener("input", () => { if (selected >= 0) editClues[selected][field] = $(id).value; });
+  });
+  // Returns { p } (p undefined for "no puzzle") or { error, field } for a puzzle that can't be saved.
+  function buildPuzzle(c) {
+    if (c.pk === "w") {
+      const p = cleanPuzzle({ k: "w", a: c.pw });
+      return p ? { p } : { error: "the Wordle word must be " + WORDLE_MIN + "–" + WORDLE_MAX + " letters, A–Z only (no spaces, numbers or accents).", field: "edit-wordle-word" };
+    }
+    if (c.pk === "q") {
+      if (!c.pq.trim()) return { error: "the puzzle needs its question text.", field: "edit-q-text" };
+      const answers = c.pa.split("|").map(a => a.trim()).filter(a => normaliseAnswer(a)).join("|");
+      const p = cleanPuzzle({ k: "q", q: c.pq, a: answers, h: c.ph });
+      return p ? { p } : { error: "the puzzle needs at least one accepted answer (letters or numbers).", field: "edit-q-answers" };
+    }
+    return { p: undefined };
+  }
+  function showEditError(text) {
+    $("edit-error").textContent = text;
+    $("edit-error").hidden = !text;
+  }
+  $("editor-panel").addEventListener("input", () => showEditError(""));
+  $("editor-panel").addEventListener("change", () => showEditError(""));
 
   $("edit-clue-text").addEventListener("input", () => {
     if (selected < 0) return;
@@ -746,17 +1347,32 @@ function startEdit(data, password) {
       $("edit-title").placeholder = "Add at least one clue first — tap the map!";
       return;
     }
+    showEditError("");
+    const puzzles = editClues.map(buildPuzzle);
+    const bad = puzzles.findIndex(b => b.error);
+    if (bad >= 0) { // take the organiser to the clue and the field that needs fixing
+      selectClue(bad);
+      $(puzzles[bad].field).focus();
+      showEditError("⚠️ Clue " + (bad + 1) + ": " + puzzles[bad].error);
+      return;
+    }
     const pw = $("edit-password").value;
     const locked = cryptoAvailable && !!normalisePassword(pw);
+    const skip = $("edit-skip").value.trim();
     const data = {
       v: 2,
       title: $("edit-title").value.trim() || undefined,
       showDist: $("edit-showdist").checked ? undefined : false,
-      clues: editClues.map(c => ({
+      skip: skip || undefined,
+      end: $("edit-end").value.trim() || undefined,
+      clues: editClues.map((c, i) => ({
         t: c.t.trim() || "Find the spot!", lat: c.lat, lng: c.lng,
-        r: c.r === DEFAULT_RADIUS_M ? undefined : c.r
+        r: c.r === DEFAULT_RADIUS_M ? undefined : c.r,
+        p: puzzles[i].p
       }))
     };
+    const noWayPast = !skip && puzzles.some(b => b.p)
+      ? " ⚠️ This hunt has puzzles but no skip code — a player who can't solve one has no way past it." : "";
     $("btn-share").disabled = true;
     try {
       const p = locked ? await encryptHunt(data, pw) : encodeHunt(data);
@@ -766,6 +1382,7 @@ function startEdit(data, password) {
       $("share-note").textContent = locked
         ? "Locked with a password. Players must type it to start: “" + normalisePassword(pw) + "” (capitals and extra spaces don't matter)."
         : "No password set — anyone with the player link can start.";
+      $("share-note").textContent += noWayPast;
       $("share").hidden = false;
       $("share").scrollTop = 0;
     } catch {
