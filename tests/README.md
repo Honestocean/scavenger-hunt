@@ -6,7 +6,9 @@ old-link compatibility and regressions (test mode, saved progress,
 two-tap restart, non-ASCII text) in `test_ui.py`; puzzles (Wordle and
 question), the play flow around them, reload at every stage, the skip code,
 the final message, the editor's puzzle fields and GPS pin buttons, and one
-end-to-end hunt in `test_puzzles.py`. The shared fixtures (local server,
+end-to-end hunt in `test_puzzles.py`; offline use (vendored Leaflet, the
+`sw.js` service worker, the "find signal and reload" message) in
+`test_offline.py`. The shared fixtures (local server,
 browser, `app`, `make_app`) are in `conftest.py`.
 
 ## Prerequisites
@@ -28,16 +30,25 @@ From the repo root:
 
 (`PYTHONDONTWRITEBYTECODE=1` and `tests/pytest.ini` keep `__pycache__` and
 `.pytest_cache` out of the repo.) One test: add `-k name`. The run takes
-about five minutes.
+about six minutes.
 
 ## How it works
 
 - The suite starts its own `http.server` for the repo on a free
   `http://localhost` port (a secure context, so geolocation and
   `crypto.subtle` work) and stops it at the end.
-- No internet is needed: the two cdnjs Leaflet URLs in `index.html` are
-  answered from the local Leaflet copy, and map tile requests get a blank
-  grey PNG. `index.html` itself is not modified for testing.
+- No internet is needed: Leaflet is vendored in `vendor/leaflet/` and map
+  tile requests get a blank grey PNG. `index.html` itself is not modified
+  for testing. (`test_offline.py` checks `vendor/leaflet/` against the npm
+  copy from prerequisite 2.)
+- Service workers are **blocked** in every test context (`App.__init__`,
+  `service_workers="block"`), because requests a service worker handles can
+  bypass the Playwright routing that fakes the tiles. Only `test_offline.py`
+  allows them, in its own contexts. It serves a temporary copy of the site
+  under `/scavenger-hunt/` (a sub-path, like GitHub Pages) from its own
+  server, which it can cut off ("down", plus `context.set_offline`) or
+  stall (requests never answered, to exercise the 3 s network timeout); it
+  also edits that copy's `index.html` to check an online reload is fresh.
 - Each test gets a fresh phone-sized context (390x844, touch, mobile) with
   geolocation granted. GPS is driven with `context.set_geolocation`; the
   `fix()` helper delivers exactly one fix and waits for the app to receive it.

@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no">
 <meta name="theme-color" content="#1a1a2e">
 <title>Scavenger Hunt</title>
-<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.css">
+<link rel="stylesheet" href="vendor/leaflet/leaflet.css">
 <style>
   :root {
     --panel-bg: rgba(26, 26, 46, 0.92);
@@ -423,7 +423,30 @@
   </form>
 </div>
 
-<script src="https://cdnjs.cloudflare.com/ajax/libs/leaflet/1.9.4/leaflet.min.js"></script>
+<!-- Shown only if the map library could not be loaded (no signal and nothing cached yet). -->
+<div id="no-leaflet" hidden style="position:fixed;inset:0;z-index:100000;background:#11271f;color:#fff;font-size:18px;line-height:1.5;text-align:center;padding:24px;overflow-y:auto;flex-direction:column;align-items:center;justify-content:center;">
+  <h2 style="margin:0 0 12px;">The hunt couldn't load</h2>
+  <p style="margin:0 0 20px;max-width:420px;">There is not enough signal to load the map. Find a spot with signal (or Wi-Fi) and reload this page. Your progress is saved.</p>
+  <button class="primary" type="button" onclick="location.reload()" style="flex:none;padding:14px 28px;font-size:17px;">Reload</button>
+</div>
+
+<script>
+// Offline support: the service worker caches the app so a reload with no signal still works.
+// Kept in its own script, and wrapped, so that nothing here can ever stop the app itself.
+try {
+  if ("serviceWorker" in navigator && window.isSecureContext) {
+    navigator.serviceWorker.register("sw.js").catch(function () { /* the app works without it */ });
+  }
+} catch (e) { /* the app works without it */ }
+</script>
+<script src="vendor/leaflet/leaflet.js"></script>
+<script>
+if (typeof L === "undefined") { // Leaflet did not load: say so instead of a dead blank screen
+  var noLeaflet = document.getElementById("no-leaflet");
+  noLeaflet.hidden = false;
+  noLeaflet.style.display = "flex";
+}
+</script>
 <script>
 "use strict";
 

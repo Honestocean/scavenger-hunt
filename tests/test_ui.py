@@ -91,9 +91,12 @@ def hunt_obj(clues, **extra):
 class App:
     """One phone-sized browser context with a controllable GPS."""
 
-    def __init__(self, browser, base, start=HOME, accuracy=5):
+    def __init__(self, browser, base, start=HOME, accuracy=5, service_workers="block"):
         self.base = base
+        # Service workers are blocked by default: requests they handle can bypass
+        # the routing below. Only tests/test_offline.py allows them.
         self.ctx = browser.new_context(
+            service_workers=service_workers,
             viewport={"width": 390, "height": 844},
             has_touch=True,
             is_mobile=True,
