@@ -110,6 +110,16 @@
   #finished.bare.long { justify-content: flex-start; }
   #finished.bare.long #finished-sub { font-size: 24px; font-weight: 600; }
   em { font-style: italic; }
+  /* Welcome screen: see-through so the map shows behind it */
+  #intro { background: rgba(17, 39, 31, 0.6); justify-content: center; }
+  #intro .card {
+    background: rgba(17, 39, 31, 0.9); border-radius: 16px; padding: 22px 20px;
+    max-width: 440px; width: 100%; box-shadow: 0 4px 24px rgba(0,0,0,.5);
+  }
+  #intro h1 { font-size: 30px; }
+  #intro ol { text-align: left; font-size: 17px; line-height: 1.45; padding-left: 26px; margin: 12px 0; }
+  #intro li { margin-bottom: 8px; }
+  #intro .ask { font-size: 20px; font-weight: 700; opacity: 1; margin: 14px 0 0; }
 
   /* Wordle */
   #wordle-grid {
@@ -300,6 +310,10 @@
     <input type="checkbox" id="edit-showdist" checked>
     <label for="edit-showdist">Show live distance to players (easier)</label>
   </div>
+  <div class="checkrow">
+    <input type="checkbox" id="edit-intro">
+    <label for="edit-intro">Start with a welcome screen that explains how it works</label>
+  </div>
   </div>
   <div id="edit-error" hidden></div>
   <div class="btnrow">
@@ -387,6 +401,15 @@
   <p class="hint">The hunt lives inside the link, so any change makes new links — resend the player link after editing.</p>
   <button id="btn-play-now">Play it now</button>
   <button id="btn-share-close">Back to editor</button>
+</div>
+
+<div class="overlay" id="intro" hidden>
+  <div class="card">
+    <h1 id="intro-title">Scavenger Hunt</h1>
+    <ol id="intro-steps"></ol>
+    <p class="ask">Are you ready to begin the hunt?</p>
+    <button class="primary" id="btn-intro-go">I'm ready!</button>
+  </div>
 </div>
 
 <div class="overlay" id="locked" hidden>
@@ -564,7 +587,8 @@ function cleanHunt(d) { // validate anything that came out of a URL
     });
   return {
     title: d.title ? String(d.title).slice(0, 100) : "", showDist: d.showDist !== false, clues,
-    skip: cleanText(d.skip, MAX_SKIP_TEXT), end: cleanText(d.end, MAX_END_TEXT)
+    skip: cleanText(d.skip, MAX_SKIP_TEXT), end: cleanText(d.end, MAX_END_TEXT),
+    intro: d.intro === 1 || d.intro === true
   };
 }
 
@@ -823,6 +847,9 @@ function startPlay(data) {
   $("btn-stuck").hidden = $("btn-stuck-puzzle").hidden = !hunt.skip;
 
   progressKey = payloadKey("hunt-progress-", payload);
+  // Optional welcome screen, shown until the player taps "I'm ready!" once.
+  const startedKey = payloadKey("hunt-started-", payload);
+  let started = !hunt.intro || storeGet(startedKey) === "1";
   progress = Math.max(0, Math.min(parseInt(storeGet(progressKey) || "0", 10) || 0, clues.length));
 
   // Puzzle progress: s = solved, u = "unlocked" card dismissed, h = hint revealed
@@ -865,9 +892,27 @@ function startPlay(data) {
   }
 
   function showStage() {
-    for (const id of ["puzzle", "unlocked", "found", "stuck"]) $(id).hidden = true;
+    for (const id of ["intro", "puzzle", "unlocked", "found", "stuck"]) $(id).hidden = true;
     $("unlocked-clue").textContent = "";
     $("found-clue").textContent = "";
+    if (!started) { // nothing is revealed and no arrival is detected until they begin
+      stage = "intro";
+      noTarget();
+      $("play-progress").textContent = "";
+      $("play-clue").textContent = "";
+      $("intro-title").textContent = hunt.title || "Scavenger Hunt";
+      const steps = clues.some(c => c.p)
+        ? ["🧩 Solve a puzzle to unlock each clue.",
+           "🔎 Follow the clue to the right spot. Your phone will know when you've arrived.",
+           "🔁 A new puzzle is waiting there. Keep going until the very end!"]
+        : ["🔎 Follow each clue to the right spot. Your phone will know when you've arrived.",
+           "🔁 You'll get the next clue there. Keep going until the very end!"];
+      const ol = $("intro-steps");
+      ol.textContent = "";
+      steps.forEach(t => { const li = document.createElement("li"); li.textContent = t; ol.appendChild(li); });
+      $("intro").hidden = false;
+      return;
+    }
     if (progress >= clues.length) {
       stage = "finished";
       noTarget();
@@ -1150,6 +1195,13 @@ function startPlay(data) {
     showStage();
   });
 
+  $("btn-intro-go").addEventListener("click", () => {
+    if (stage !== "intro") return;
+    started = true;
+    storeSet(startedKey, "1");
+    showStage();
+  });
+
   showStage();
 
   // Two-tap restart so a stray tap can't wipe progress (no confirm() — it blocks the tab).
@@ -1157,6 +1209,7 @@ function startPlay(data) {
   function doReset() {
     storeDel(progressKey);
     storeDel(puzzleKey);
+    storeDel(startedKey);
     location.reload();
   }
   function twoTapReset(id, label, armedLabel) {
@@ -1232,6 +1285,7 @@ function startEdit(data, password) {
     $("edit-password").value = password || "";
     $("edit-skip").value = data.skip;
     $("edit-end").value = data.end;
+    $("edit-intro").checked = data.intro;
   }
   if (!cryptoAvailable) {
     $("edit-password").disabled = true;
@@ -1448,6 +1502,7 @@ function startEdit(data, password) {
       showDist: $("edit-showdist").checked ? undefined : false,
       skip: skip || undefined,
       end: $("edit-end").value.trim() || undefined,
+      intro: $("edit-intro").checked ? 1 : undefined,
       clues: editClues.map((c, i) => ({
         t: c.t.trim() || "Find the spot!", lat: c.lat, lng: c.lng,
         r: c.r === DEFAULT_RADIUS_M ? undefined : c.r,
