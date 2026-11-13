@@ -104,6 +104,12 @@
   }
   #unlocked-clue, #found-clue { white-space: pre-wrap; overflow-wrap: anywhere; }
   #finished-sub { white-space: pre-wrap; overflow-wrap: anywhere; }
+  /* A custom final message stands alone: no heading, no buttons */
+  #finished.bare h1, #finished.bare button { display: none; }
+  #finished.bare #finished-sub { font-size: 40px; font-weight: 700; line-height: 1.25; opacity: 1; max-width: 100%; margin: 0; }
+  #finished.bare.long { justify-content: flex-start; }
+  #finished.bare.long #finished-sub { font-size: 24px; font-weight: 600; }
+  em { font-style: italic; }
 
   /* Wordle */
   #wordle-grid {
@@ -283,6 +289,11 @@
       <label>Hint (optional — players can ask to see it)
         <input type="text" id="edit-q-hint" placeholder="Leave blank for no hint" maxlength="300">
       </label>
+      <label>More questions at this stop (optional — one per line: question = answers = hint)
+        <textarea id="edit-q-more" rows="3" maxlength="1500" placeholder="e.g. And what colour was it? = red|scarlet"
+                  autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></textarea>
+      </label>
+      <div class="hint">Tip: wrap words in *asterisks* for italics.</div>
     </div>
   </div>
   <div class="checkrow">
@@ -476,7 +487,22 @@ function clampRadius(r) {
 
 // --- Puzzles: solved before a clue's text is revealed ---
 const WORDLE_MIN = 3, WORDLE_MAX = 8, WORDLE_ROWS = 6;
-const MAX_PUZZLE_TEXT = 300, MAX_END_TEXT = 300, MAX_SKIP_TEXT = 60;
+const MAX_PUZZLE_TEXT = 300, MAX_END_TEXT = 300, MAX_SKIP_TEXT = 60, MAX_FOLLOW_UPS = 5;
+
+// Text with *asterisks* shown as italics — built from DOM nodes, never innerHTML.
+function setRich(el, text) {
+  el.textContent = "";
+  const re = /\*(\S(?:[^*\n]*\S)?)\*/g;
+  let last = 0, m;
+  while ((m = re.exec(text))) {
+    if (m.index > last) el.append(text.slice(last, m.index));
+    const em = document.createElement("em");
+    em.textContent = m[1];
+    el.append(em);
+    last = re.lastIndex;
+  }
+  if (last < text.length) el.append(text.slice(last));
+}
 
 // Typed answers are compared forgivingly: case, accents-as-typed (NFKC), punctuation,
 // stray spaces and a leading "the"/"a"/"an" don't matter.
@@ -508,6 +534,18 @@ function cleanPuzzle(p) {
       if (!q || !answerList(a).length) return null;
       const out = { k: "q", q, a };
       if (h) out.h = h;
+      // n = follow-up questions asked one after another at the same stop
+      if (Array.isArray(p.n)) {
+        const n = p.n.slice(0, MAX_FOLLOW_UPS).map(x => {
+          if (!x || typeof x !== "object" || Array.isArray(x)) return null;
+          const q2 = cleanText(x.q, MAX_PUZZLE_TEXT), a2 = cleanText(x.a, MAX_PUZZLE_TEXT), h2 = cleanText(x.h, MAX_PUZZLE_TEXT);
+          if (!q2 || !answerList(a2).length) return null;
+          const o = { q: q2, a: a2 };
+          if (h2) o.h = h2;
+          return o;
+        }).filter(Boolean);
+        if (n.length) out.n = n;
+      }
       return out;
     }
   } catch { /* fall through */ }
@@ -769,24 +807,41 @@ function startPlay(data) {
   document.title = hunt.title ? hunt.title + " — Scavenger Hunt" : "Scavenger Hunt";
   $("coords-row").style.display = "none"; // less clutter for players
   if (!hunt.showDist) $("play-dist-row").style.display = "none";
-  if (hunt.end) $("finished-sub").textContent = hunt.end;
+  if (hunt.end) {
+    $("finished-sub").textContent = hunt.end;
+    $("finished").classList.add("bare");
+    if (hunt.end.length > 60) $("finished").classList.add("long");
+    // No visible buttons on this screen: five quick taps on the message restart the hunt.
+    let taps = 0, lastTap = 0;
+    $("finished-sub").addEventListener("click", () => {
+      const now = Date.now();
+      taps = now - lastTap < 1000 ? taps + 1 : 1;
+      lastTap = now;
+      if (taps >= 5) doReset();
+    });
+  }
   $("btn-stuck").hidden = $("btn-stuck-puzzle").hidden = !hunt.skip;
 
   progressKey = payloadKey("hunt-progress-", payload);
   progress = Math.max(0, Math.min(parseInt(storeGet(progressKey) || "0", 10) || 0, clues.length));
 
   // Puzzle progress: s = solved, u = "unlocked" card dismissed, h = hint revealed
-  // (each a map of clue index → 1), w = Wordle guesses per clue index.
+  // (each a map of clue index → 1), w = Wordle guesses per clue index,
+  // n = how many of a stop's questions have been answered so far.
   const puzzleKey = payloadKey("hunt-puzzle-", payload);
-  const pz = { s: {}, u: {}, h: {}, w: {} };
+  const pz = { s: {}, u: {}, h: {}, w: {}, n: {} };
   try {
     const saved = JSON.parse(storeGet(puzzleKey) || "null");
     if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-      for (const f of ["s", "u", "h", "w"]) {
+      for (const f of ["s", "u", "h", "w", "n"]) {
         const m = saved[f];
         if (!m || typeof m !== "object" || Array.isArray(m)) continue;
         clues.forEach((c, i) => {
           if (!c.p || !Object.prototype.hasOwnProperty.call(m, i)) return;
+          if (f === "n") {
+            if (c.p.k === "q" && Number.isInteger(m[i]) && m[i] > 0 && m[i] <= (c.p.n || []).length) pz.n[i] = m[i];
+            return;
+          }
           if (f !== "w") { if (m[i] === 1) pz[f][i] = 1; return; }
           const w = cleanWordleState(m[i], c.p);
           if (w) pz.w[i] = w;
@@ -798,6 +853,9 @@ function startPlay(data) {
 
   const LOCKED_TEXT = "🧩 Solve the puzzle to reveal this clue.";
   const puzzlePending = i => i < clues.length && !!clues[i].p && !pz.s[i];
+  // A question puzzle may be several questions in a row; this is the one being asked now.
+  const partCount = i => 1 + (clues[i].p.n || []).length;
+  const curPart = i => { const j = pz.n[i] || 0; return j ? clues[i].p.n[j - 1] : clues[i].p; };
   let stage = ""; // "puzzle" | "unlocked" | "hunting" | "found" | "finished"
 
   function noTarget() {
@@ -832,12 +890,12 @@ function startPlay(data) {
       stage = "unlocked";
       noTarget();
       $("play-clue").textContent = LOCKED_TEXT;
-      $("unlocked-clue").textContent = c.t;
+      setRich($("unlocked-clue"), c.t);
       $("unlocked").hidden = false;
       return;
     }
     stage = "hunting";
-    $("play-clue").textContent = c.t;
+    setRich($("play-clue"), c.t);
     setTarget(c.lat, c.lng, c.r);
     updateDistance();
     // No target marker in play mode — finding the spot is the game.
@@ -859,7 +917,7 @@ function startPlay(data) {
       $("btn-next").textContent = "Solve the puzzle";
     } else {
       $("found-sub").textContent = "Here's your next clue:";
-      $("found-clue").textContent = clues[progress].t;
+      setRich($("found-clue"), clues[progress].t);
       $("found-clue").hidden = false;
       $("btn-next").textContent = "Let's go!";
     }
@@ -872,6 +930,7 @@ function startPlay(data) {
     if (i !== progress || !puzzlePending(i)) return;
     pz.s[i] = 1;
     delete pz.w[i];
+    delete pz.n[i];
     savePuzzles();
     if (delay) setTimeout(() => { if (stage === "puzzle") showStage(); }, delay);
     else showStage();
@@ -884,14 +943,17 @@ function startPlay(data) {
     $("puzzle-q").hidden = p.k !== "q";
     $("puzzle-w").hidden = p.k !== "w";
     if (p.k === "q") {
-      $("puzzle-sub").textContent = "Answer this to unlock " + which + ".";
-      $("puzzle-question").textContent = p.q;
+      const part = curPart(i), total = partCount(i);
+      $("puzzle-sub").textContent = total > 1
+        ? "Question " + ((pz.n[i] || 0) + 1) + " of " + total + " — answer them all to unlock " + which + "."
+        : "Answer this to unlock " + which + ".";
+      setRich($("puzzle-question"), part.q);
       $("puzzle-answer").value = "";
       $("puzzle-wrong").hidden = true;
       $("puzzle-hint").textContent = "";
       $("puzzle-hint").hidden = true;
-      $("btn-hint").hidden = !p.h;
-      if (p.h && pz.h[i]) revealHint(i);
+      $("btn-hint").hidden = !part.h;
+      if (part.h && pz.h[i]) revealHint(i);
     } else {
       $("puzzle-sub").textContent = "Guess the " + p.a.length + "-letter word to unlock " + which + ".";
       openWordle(i);
@@ -900,12 +962,12 @@ function startPlay(data) {
     $("puzzle").scrollTop = 0;
   }
   function revealHint(i) {
-    $("puzzle-hint").textContent = "💡 Hint: " + clues[i].p.h;
+    setRich($("puzzle-hint"), "💡 Hint: " + curPart(i).h);
     $("puzzle-hint").hidden = false;
     $("btn-hint").hidden = true;
   }
   $("btn-hint").addEventListener("click", () => {
-    if (stage !== "puzzle" || !clues[progress].p.h) return;
+    if (stage !== "puzzle" || clues[progress].p.k !== "q" || !curPart(progress).h) return;
     pz.h[progress] = 1;
     savePuzzles();
     revealHint(progress);
@@ -914,7 +976,15 @@ function startPlay(data) {
     ev.preventDefault();
     if (stage !== "puzzle" || clues[progress].p.k !== "q") return;
     const typed = $("puzzle-answer").value;
-    if (answerMatches(typed, clues[progress].p.a)) { puzzleSolved(progress); return; }
+    if (answerMatches(typed, curPart(progress).a)) {
+      const done = (pz.n[progress] || 0) + 1;
+      if (done >= partCount(progress)) { puzzleSolved(progress); return; }
+      pz.n[progress] = done; // on to the next question at this stop
+      delete pz.h[progress];
+      savePuzzles();
+      openPuzzle(progress);
+      return;
+    }
     $("puzzle-wrong").hidden = !typed.trim();
     $("puzzle-answer").focus();
   });
@@ -1144,12 +1214,13 @@ function startEdit(data, password) {
   // Each clue carries its puzzle as editable fields (pk = type, pw = Wordle word,
   // pq / pa / ph = question, answers, hint) so switching type loses nothing typed.
   function newClue(lat, lng) {
-    return { t: "", lat: +lat.toFixed(6), lng: +lng.toFixed(6), r: DEFAULT_RADIUS_M, pk: "none", pw: "", pq: "", pa: "", ph: "" };
+    return { t: "", lat: +lat.toFixed(6), lng: +lng.toFixed(6), r: DEFAULT_RADIUS_M, pk: "none", pw: "", pq: "", pa: "", ph: "", pm: "" };
   }
   const editClues = (data ? data.clues : []).map(c => {
     const p = c.p || {};
     return { t: c.t, lat: c.lat, lng: c.lng, r: c.r, pk: c.p ? p.k : "none",
-             pw: p.k === "w" ? p.a : "", pq: p.k === "q" ? p.q : "", pa: p.k === "q" ? p.a : "", ph: (p.k === "q" && p.h) || "" };
+             pw: p.k === "w" ? p.a : "", pq: p.k === "q" ? p.q : "", pa: p.k === "q" ? p.a : "", ph: (p.k === "q" && p.h) || "",
+             pm: p.k === "q" && p.n ? p.n.map(x => x.q + " = " + x.a + (x.h ? " = " + x.h : "")).join("\n") : "" };
   });
   let selected = -1;
   const markers = [], circles = [];
@@ -1211,6 +1282,7 @@ function startEdit(data, password) {
       $("edit-q-text").value = c.pq;
       $("edit-q-answers").value = c.pa;
       $("edit-q-hint").value = c.ph;
+      $("edit-q-more").value = c.pm;
       $("edit-wordle-wrap").hidden = c.pk !== "w";
       $("edit-q-wrap").hidden = c.pk !== "q";
     }
@@ -1301,7 +1373,7 @@ function startEdit(data, password) {
     editClues[selected].pk = v === "w" || v === "q" ? v : "none";
     renderList();
   });
-  [["edit-wordle-word", "pw"], ["edit-q-text", "pq"], ["edit-q-answers", "pa"], ["edit-q-hint", "ph"]].forEach(([id, field]) => {
+  [["edit-wordle-word", "pw"], ["edit-q-text", "pq"], ["edit-q-answers", "pa"], ["edit-q-hint", "ph"], ["edit-q-more", "pm"]].forEach(([id, field]) => {
     $(id).addEventListener("input", () => { if (selected >= 0) editClues[selected][field] = $(id).value; });
   });
   // Returns { p } (p undefined for "no puzzle") or { error, field } for a puzzle that can't be saved.
@@ -1313,8 +1385,19 @@ function startEdit(data, password) {
     if (c.pk === "q") {
       if (!c.pq.trim()) return { error: "the puzzle needs its question text.", field: "edit-q-text" };
       const answers = c.pa.split("|").map(a => a.trim()).filter(a => normaliseAnswer(a)).join("|");
-      const p = cleanPuzzle({ k: "q", q: c.pq, a: answers, h: c.ph });
-      return p ? { p } : { error: "the puzzle needs at least one accepted answer (letters or numbers).", field: "edit-q-answers" };
+      const lines = c.pm.split("\n").map(l => l.trim()).filter(l => l);
+      const n = lines.map(l => {
+        const parts = l.split("=").map(x => x.trim());
+        return { q: parts[0], a: parts[1] || "", h: parts.slice(2).join(" = ") };
+      });
+      const p = cleanPuzzle({ k: "q", q: c.pq, a: answers, h: c.ph, n });
+      if (!p) return { error: "the puzzle needs at least one accepted answer (letters or numbers).", field: "edit-q-answers" };
+      if ((p.n || []).length !== lines.length) {
+        return { error: lines.length > MAX_FOLLOW_UPS
+          ? "a stop can have at most " + MAX_FOLLOW_UPS + " extra questions."
+          : "each extra question needs its own line like: Question? = answer", field: "edit-q-more" };
+      }
+      return { p };
     }
     return { p: undefined };
   }

@@ -1513,7 +1513,8 @@ def test_gps_arrival_while_the_stuck_screen_is_open_is_not_hidden_behind_it(app)
 
 def test_play_again_on_the_final_screen_needs_two_taps(app):
     """One stray tap on the last screen must not wipe the hunt and its final message."""
-    p = play(app, [clue(C1, Q)], end="The big finish")
+    # (a custom final message hides this button; see tests/test_extras.py)
+    p = play(app, [clue(C1, Q)])
     solve_q(app)
     go(app)
     find_clue(app, C1["lat"], C1["lng"])
@@ -1523,7 +1524,7 @@ def test_play_again_on_the_final_screen_needs_two_taps(app):
     btn.click()
     app.settle(400)
     only_overlay(app, "#finished")
-    expect(p.locator("#finished-sub")).to_have_text("The big finish")
+    expect(p.locator("#finished-sub")).to_have_text("You found every clue. Well done!")
     assert btn.inner_text() != label, "the button should say that a second tap is needed"
     app.reload()
     only_overlay(app, "#finished")
