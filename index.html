@@ -498,7 +498,7 @@ if (typeof L === "undefined") { // Leaflet did not load: say so instead of a dea
 <script>
 "use strict";
 
-const BUILD = "build 9";
+const BUILD = "build 10";
 const DEFAULT_RADIUS_M = 25;
 const MIN_RADIUS_M = 10, MAX_RADIUS_M = 100;
 const MAX_TRIGGER_ACCURACY_M = 35;   // ignore fixes worse than this for arrival checks
@@ -680,12 +680,23 @@ function cleanHunt(d) { // validate anything that came out of a URL
 }
 
 // --- Mode from URL hash: #hunt=… plays, #edit (or #edit=…) edits, else GPS test ---
+// Built-in hunts: a short name in the link (#hunt=newport) stands for a hunt stored
+// right here in the app, so it can never be lost or cut short when a link is copied.
+const BUILT_IN = {
+  newport: "e.w2tbgVbdHL9iHt-gyMVPbw.PpJkMmOLnR4tS1Af.Um7RmRy2QV6FFDV2AND3I36B3YOWUBwD15vmUk6hoCUcCyFzu7llg8zZKn6eo7y--t08JaTXi3fjN5XRFyYSKPWA5X3zSY5LXq6yCrbf7AUMy-1AVN0TEvRrrMDwRSPqPG6iYu3CtS21fM8h0r_v406gk9eH4vU7CAqMkqfgi1F-lFTiNfNUY6gFhZvA0l2P5ABtKY39w_7_Sf2FrpKjYmyW2NQR8WvsC4s7mWVln0wBMExWYvLUNP_6djysdZeK-DM_2i-NZ3S5rBlM6vHVXrJ_Mm6ew9UURnQb_Y6knU06TQhTIS3SUDw_7tZ_jZGiPEXfyfFj6Nncv1RVT3XZkI0i7kWSphV21wPzijrvlljh6v-ptvNm4VQBXVDDmGahz0guHX12wDX8hkY4sDyNxvFYyMdZ1YWXIL9-qi8s2kSwFgc5cObrKBiHCm6tpGBAU-Lryv2MsSmcCQTrgkXtdLzUgdjGqNhqDf8lfN9Ea3-tWxV_ivPp5wW7B6yN0SbbDtD8hVxB_8HcRQe8xhkS5cNCjrqBbu1AqhfFtRh7Z00F44GcOE2q025h2lb_f72O--J0xEqBBo3bbaQMTrACn7kLffFVfNHWjgyqFH6RYjNdNLy6kJ6-sZ7Pjp_mbMKtkiob0T0AEoep4ACTSMrhpmBp0cdS3G2REqGuo-HhQTLoEPMfzoSlH9iedzygupcNW7aL-1V-d5UzpCv5M7edCKlY7l6alwgkH5ow8bhiIePvwTJoTK46trpVuenqpOGHReMDLoYBIUrmWDpq_uWaLDKj_TGYREeQfCrVRab8yQaNrGC1COizkkfO7TSz1pGaHaWJCc7RBsnXD_86ov61ay-hVlhnH-FmWlgAiss0kdX9YaNopc2Lea8-7yr49HdJC4VOkb2JjdgBWTO1wNNPGQJvhBp-PCwifC9QvJ92xi4W8jkoTrtxSQAGVqnS7DDsbWcxUD_HK2Cve-olAs1c5YNiqXW00xFCW-r06Ur-KzNBfZlqftx1fJckUro6RLq5PhMKVOWNqT51GBbWD1Pjl3eVY6ujuGWMXOLVwy2D7M9v9Y6Z8JnyiXbxsZyjAYUqjC5GctTc0oz3wWG6uSPv-3_oJk1xHoaUQTJDbfmruQS9t12PYjLvBEe0LasCnu1v-T6CkQXb4gVzWqNQDH24qOSsmeJXyi7T3ovFcGR_51ks7NBO40SCD6c3kL5Wl4OwpMC8s2LTEakugAkn98fQEv_sFC-_RvztC6alZgMOt0FYLU1zYkjhKYwVCvMryQm2golRwE6Y5tjFU-5Pf-s8s-ZkmNQZ5s7fHUqZ7rmqK05OxXzJ8QtJOGpO_GpoP0Q234U4jWeUNBJrXTA9pPCbimfsKAPrmQgGupWtBzUCKjzOdxXeCjCI5YdqbYwt5VfgqD1LZ9yCgBHrwktSn6Zd9jntkIee-1lBz3CtnjVT5uGPPB0TqJ6B9wWWUWOREB0ldxWuFuVZpY3AUZk6vH1ZbL7Uz-u_6oAGZlId97LyfizldPkviyyOoUlFpgh5081k0g5RR0EIQz2y05_h3lGcvHhL8E15AsA411quZU_w92kpBVHjMgzTsH4u69zP8g6o7MMAm9k_VtpHrwiYhN-MJyqSv98YRWYbPf1Bduacx832LBzBmBqmv4GvRLsLfuZHJikahAaKQGp3qsUAGmB27jmwDFWlrh6yoEq9-5p8U97D2AUNgSp_bnGp8_-xAMb6wl8psXJxRhspPpPYSu7og4JO-8uMvrkgqCRnInqQhWrhtomRe4Y84F4N7YMnPRGlc2F3RDZfFCG4fcPwmPrINtthGy7QPBf0olgHKNtUNH0UDZSye7L137LhdC2MFsHHBnCvvU6h3SjPnj4bO2cVw6B4fgnjI8Vgc9zuouDidnyn0VtwZCwh10tYew8UFiXiN718Fvi21IoU6zHeadxFcrMXSuFZOXnguHJYDsuEw8gfn7WfBdCMCdoTBnruGMCilSniBSHvJ9I-RfMKdCslnrRWYfZZc-xUjKO227OmcGBtgthcD7yJcevrqPu0ZR_koQaQ4ruQqx4gKDcRQKJ8n_XoTQTXD_gkI41So14Hi31Ypy21AMx5wWL1Z9s2FYCko-B0nFhVb-R1AKOf2tH54H2Y_PggjfFCSJf8mzyvgodsuuci5N5g7hTk8n25JzW8KaGosY6bXvwAmViFuOmO__1k11c_eUKHiF2s2SjM8aThGtYFuBuu_nux7f93L_F6CbjqCVc8vi5v37FqFp3fwMOIF-l8s7vcpObXbZDJCTlpfunqVjdNKlkQvCIbWwNQZ_FKfpdvrd5sAPQztjpwUWjounhUHtzPNFJDa4kMvdKvW5fVY0d_24nqiHArEchsmXvD2Pze-AWe8UWLODXj5fZ-8CkTymSXtLiRzO59cDsWt5KD_Dv-eXtxyOX5TwdGWZJFQ7wvuVM5976h6iADZTlbKXFvI5MAaJs8oH15A6zrCNhhGUD83z4nIHICL5lcc05RgvdTi9kNqDHZPRnLn5M_f-p52R7ZE4MUlSsbzi9-8keYaO5GBbiKyDebX-cbUSDJn_hCS61WREsU_20C2PKrW0ZIYFkhB4hh_LlvKgYQcNLUS2eH0hEGkqrrR8kY_VOHrDgoQ7ErqeKwJD06wjhOuelybjQ6kY-Zskn86JQh0YeVjbdLPfkjYvInDF08G5qe4FvMyOgrrcAxzgvNOjA_Yh27MSzuEFMLG0MHiJgpTiBKSPbpMLPZkhRLhIBk36K5XXccmm3NI6n6PF3Q-ug8u_dd"
+};
 let mode = "test", hunt = null, payload = null;
+let storeId = null; // what saved progress is filed under: the built-in name, else the payload
 {
   const h = location.hash.slice(1);
   if (h.startsWith("hunt=")) { mode = "play"; payload = h.slice(5); }
   else if (h === "edit") { mode = "edit"; }
   else if (h.startsWith("edit=")) { mode = "edit"; payload = h.slice(5); }
+  storeId = payload;
+  if (payload && Object.prototype.hasOwnProperty.call(BUILT_IN, payload.toLowerCase())) {
+    storeId = "builtin:" + payload.toLowerCase(); // progress survives an update to the built-in hunt
+    payload = BUILT_IN[payload.toLowerCase()];
+  }
 }
 
 // Mode lives in the hash — any hash change is a mode change; reload to re-init.
@@ -853,7 +864,7 @@ function onArrival() {
 // ================= PASSWORD GATE =================
 // Resolves with { data, password } once the right password is entered.
 async function unlock(encPayload) {
-  const pwKey = payloadKey("hunt-pw-", encPayload);
+  const pwKey = payloadKey("hunt-pw-", storeId);
   if (!cryptoAvailable) {
     $("locked-sub").textContent = "This hunt is password-protected, which needs a secure (https) page. Open the link over https.";
     $("locked-form").hidden = true;
@@ -953,16 +964,16 @@ function startPlay(data) {
   // With a skip code set, restarting needs the code too (no stray-tap or pocket restarts).
   $("btn-play-reset").hidden = !!hunt.skip;
 
-  progressKey = payloadKey("hunt-progress-", payload);
+  progressKey = payloadKey("hunt-progress-", storeId);
   // Optional welcome screen, shown until the player taps "I'm ready!" once.
-  const startedKey = payloadKey("hunt-started-", payload);
+  const startedKey = payloadKey("hunt-started-", storeId);
   let started = !hunt.intro || storeGet(startedKey) === "1";
   progress = Math.max(0, Math.min(parseInt(storeGet(progressKey) || "0", 10) || 0, clues.length));
 
   // Puzzle progress: s = solved, u = "unlocked" card dismissed, h = hint revealed
   // (each a map of clue index → 1), w = Wordle guesses per clue index,
   // n = how many of a stop's questions have been answered so far.
-  const puzzleKey = payloadKey("hunt-puzzle-", payload);
+  const puzzleKey = payloadKey("hunt-puzzle-", storeId);
   const pz = { s: {}, u: {}, h: {}, w: {}, n: {}, c: {} }; // c = Connections groups found
   try {
     const saved = JSON.parse(storeGet(puzzleKey) || "null");
@@ -1294,7 +1305,7 @@ function startPlay(data) {
     cIndex = i; cSel = []; cDone = false;
     const found = pz.c[i] || [], ids = [];
     for (let id = 0; id < 16; id++) if (!found.includes(id >> 2)) ids.push(id);
-    cOrder = shuffled(ids, parseInt(payloadKey("", payload), 36) + i * 7919);
+    cOrder = shuffled(ids, parseInt(payloadKey("", storeId), 36) + i * 7919);
     $("conn-msg").textContent = "";
     renderConn();
   }
