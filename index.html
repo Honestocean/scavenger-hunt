@@ -118,6 +118,26 @@
   #finished.bare.long { justify-content: flex-start; }
   #finished.bare.long #finished-sub { font-size: 24px; font-weight: 600; }
   em { font-style: italic; }
+  /* Connections: four groups of four */
+  #puzzle-c { width: 100%; max-width: 480px; }
+  #conn-grid { display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 6px; }
+  #conn-grid button {
+    margin: 0; padding: 4px 3px; min-height: 64px; min-width: 0; width: auto; max-width: none; border-radius: 8px;
+    background: #efefe6; color: #11271f; font-size: 13px; font-weight: 700; line-height: 1.15;
+    text-transform: uppercase; overflow-wrap: anywhere; touch-action: manipulation;
+    -webkit-user-select: none; user-select: none; flex: none;
+  }
+  #conn-grid button.sel { background: #5a594e; color: #fff; }
+  #conn-grid button.long { font-size: 10px; letter-spacing: -0.3px; padding: 4px 1px; }
+  #conn-solved .grp { border-radius: 8px; padding: 9px 6px; margin-bottom: 6px; color: #11271f; }
+  #conn-solved .grp b { display: block; text-transform: uppercase; font-size: 14px; }
+  #conn-solved .grp span { font-size: 13px; }
+  #conn-solved .c0 { background: #f9df6d; } #conn-solved .c1 { background: #a0c35a; }
+  #conn-solved .c2 { background: #b0c4ef; } #conn-solved .c3 { background: #ba81c5; }
+  #conn-msg { min-height: 22px; margin: 8px 0; color: var(--warn); font-weight: 600; }
+  #conn-actions { display: flex; gap: 8px; }
+  #conn-actions button { flex: 1 1 0; margin: 0; min-width: 0; max-width: none; padding: 12px 4px; font-size: 15px; }
+  #edit-conn { width: 100%; }
   /* Welcome screen: see-through so the map shows behind it */
   #intro { background: rgba(17, 39, 31, 0.6); }
   #intro .card {
@@ -289,9 +309,16 @@
         <option value="none">No puzzle</option>
         <option value="w">Wordle (guess a secret word)</option>
         <option value="q">Question / riddle</option>
+        <option value="c">Connections (four groups of four)</option>
       </select>
     </label>
     <div class="hint">Players solve the puzzle first, then see the clue text, then go to the pin.</div>
+    <div id="edit-conn-wrap" hidden>
+      <label>Four groups, one per line, as  Group name: word, word, word, word
+        <textarea id="edit-conn" rows="5" maxlength="1200" placeholder="Trees: Oak, Ash, Elm, Yew"
+                  autocomplete="off" autocapitalize="none" autocorrect="off" spellcheck="false"></textarea>
+      </label>
+    </div>
     <div id="edit-wordle-wrap" hidden>
       <label>Secret word (3–8 letters, A–Z only)
         <input type="text" id="edit-wordle-word" placeholder="e.g. BEACH" maxlength="12"
@@ -360,6 +387,16 @@
       <button class="primary" id="btn-puzzle-submit" type="submit">Check answer</button>
     </form>
     <button class="quiet" id="btn-hint" type="button" hidden>💡 Need a hint?</button>
+  </div>
+  <div id="puzzle-c" hidden>
+    <div id="conn-solved"></div>
+    <div id="conn-grid"></div>
+    <div id="conn-msg" role="status"></div>
+    <div id="conn-actions">
+      <button id="btn-conn-shuffle" type="button">Shuffle</button>
+      <button id="btn-conn-clear" type="button">Deselect</button>
+      <button class="primary" id="btn-conn-submit" type="button" disabled>Submit</button>
+    </div>
   </div>
   <div id="puzzle-w" hidden>
     <div id="wordle-grid"></div>
@@ -461,7 +498,7 @@ if (typeof L === "undefined") { // Leaflet did not load: say so instead of a dea
 <script>
 "use strict";
 
-const BUILD = "build 8";
+const BUILD = "build 9";
 const DEFAULT_RADIUS_M = 25;
 const MIN_RADIUS_M = 10, MAX_RADIUS_M = 100;
 const MAX_TRIGGER_ACCURACY_M = 35;   // ignore fixes worse than this for arrival checks
@@ -545,7 +582,7 @@ function clampRadius(r) {
 
 // --- Puzzles: solved before a clue's text is revealed ---
 const WORDLE_MIN = 3, WORDLE_MAX = 8, WORDLE_ROWS = 6;
-const MAX_PUZZLE_TEXT = 300, MAX_END_TEXT = 300, MAX_SKIP_TEXT = 60, MAX_FOLLOW_UPS = 5;
+const MAX_PUZZLE_TEXT = 300, MAX_END_TEXT = 300, MAX_SKIP_TEXT = 60, MAX_FOLLOW_UPS = 5, MAX_CONN_WORD = 30;
 
 // Text with *asterisks* shown as italics — built from DOM nodes, never innerHTML.
 function setRich(el, text) {
@@ -586,6 +623,21 @@ function cleanPuzzle(p) {
       if (typeof p.a !== "string") return null;
       const a = p.a.trim().toUpperCase();
       return new RegExp("^[A-Z]{" + WORDLE_MIN + "," + WORDLE_MAX + "}$").test(a) ? { k: "w", a } : null;
+    }
+    if (p.k === "c") { // Connections: exactly four groups of four different words
+      if (!Array.isArray(p.g) || p.g.length !== 4) return null;
+      const seen = new Set(), g = [];
+      for (const x of p.g) {
+        if (!x || typeof x !== "object" || !Array.isArray(x.w) || x.w.length !== 4) return null;
+        const w = x.w.map(v => cleanText(v, MAX_CONN_WORD));
+        for (const v of w) {
+          const key = v.toLowerCase();
+          if (!v || seen.has(key)) return null;
+          seen.add(key);
+        }
+        g.push({ n: cleanText(x.n, 60) || "Group " + (g.length + 1), w });
+      }
+      return { k: "c", g };
     }
     if (p.k === "q") {
       const q = cleanText(p.q, MAX_PUZZLE_TEXT), a = cleanText(p.a, MAX_PUZZLE_TEXT), h = cleanText(p.h, MAX_PUZZLE_TEXT);
@@ -911,17 +963,24 @@ function startPlay(data) {
   // (each a map of clue index → 1), w = Wordle guesses per clue index,
   // n = how many of a stop's questions have been answered so far.
   const puzzleKey = payloadKey("hunt-puzzle-", payload);
-  const pz = { s: {}, u: {}, h: {}, w: {}, n: {} };
+  const pz = { s: {}, u: {}, h: {}, w: {}, n: {}, c: {} }; // c = Connections groups found
   try {
     const saved = JSON.parse(storeGet(puzzleKey) || "null");
     if (saved && typeof saved === "object" && !Array.isArray(saved)) {
-      for (const f of ["s", "u", "h", "w", "n"]) {
+      for (const f of ["s", "u", "h", "w", "n", "c"]) {
         const m = saved[f];
         if (!m || typeof m !== "object" || Array.isArray(m)) continue;
         clues.forEach((c, i) => {
           if (!c.p || !Object.prototype.hasOwnProperty.call(m, i)) return;
           if (f === "n") {
             if (c.p.k === "q" && Number.isInteger(m[i]) && m[i] > 0 && m[i] <= (c.p.n || []).length) pz.n[i] = m[i];
+            return;
+          }
+          if (f === "c") {
+            if (c.p.k === "c" && Array.isArray(m[i])) {
+              const v = [...new Set(m[i].filter(x => Number.isInteger(x) && x >= 0 && x < 4))];
+              if (v.length && v.length < 4) pz.c[i] = v;
+            }
             return;
           }
           if (f !== "w") { if (m[i] === 1) pz[f][i] = 1; return; }
@@ -1034,6 +1093,7 @@ function startPlay(data) {
     pz.s[i] = 1;
     delete pz.w[i];
     delete pz.n[i];
+    delete pz.c[i];
     savePuzzles();
     if (delay) setTimeout(() => { if (stage === "puzzle") showStage(); }, delay);
     else showStage();
@@ -1045,7 +1105,11 @@ function startPlay(data) {
     const which = "clue " + (i + 1) + " of " + clues.length;
     $("puzzle-q").hidden = p.k !== "q";
     $("puzzle-w").hidden = p.k !== "w";
-    if (p.k === "q") {
+    $("puzzle-c").hidden = p.k !== "c";
+    if (p.k === "c") {
+      $("puzzle-sub").textContent = "Find the four groups of four to unlock " + which + ".";
+      openConn(i);
+    } else if (p.k === "q") {
       const part = curPart(i), total = partCount(i);
       $("puzzle-sub").textContent = total > 1
         ? "Question " + ((pz.n[i] || 0) + 1) + " of " + total + " — answer them all to unlock " + which + "."
@@ -1214,6 +1278,103 @@ function startPlay(data) {
     wordleKey(k);
   });
 
+  // ---- Connections: tap four tiles that belong together; wrong guesses cost nothing ----
+  let cIndex = -1, cOrder = [], cSel = [], cDone = false; // a tile id is group * 4 + position
+  function shuffled(arr, seed) { // seeded, so a reload shows the same layout
+    const a = arr.slice();
+    let x = (seed >>> 0) || 1;
+    for (let j = a.length - 1; j > 0; j--) {
+      x ^= x << 13; x >>>= 0; x ^= x >>> 17; x ^= x << 5; x >>>= 0;
+      const k = x % (j + 1);
+      [a[j], a[k]] = [a[k], a[j]];
+    }
+    return a;
+  }
+  function openConn(i) {
+    cIndex = i; cSel = []; cDone = false;
+    const found = pz.c[i] || [], ids = [];
+    for (let id = 0; id < 16; id++) if (!found.includes(id >> 2)) ids.push(id);
+    cOrder = shuffled(ids, parseInt(payloadKey("", payload), 36) + i * 7919);
+    $("conn-msg").textContent = "";
+    renderConn();
+  }
+  function renderConn() {
+    const g = clues[cIndex].p.g;
+    const box = $("conn-solved");
+    box.textContent = "";
+    (pz.c[cIndex] || []).forEach(gi => {
+      const row = document.createElement("div");
+      row.className = "grp c" + gi;
+      const name = document.createElement("b"), words = document.createElement("span");
+      name.textContent = g[gi].n;
+      words.textContent = g[gi].w.join(", ");
+      row.append(name, words);
+      box.appendChild(row);
+    });
+    const grid = $("conn-grid");
+    grid.textContent = "";
+    cOrder.forEach(id => {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.textContent = g[id >> 2].w[id & 3];
+      if (cSel.includes(id)) b.className = "sel";
+      if (/\S{10,}/.test(b.textContent)) b.classList.add("long"); // keep a long word on one line
+      b.addEventListener("click", () => {
+        if (cDone || stage !== "puzzle") return;
+        const k = cSel.indexOf(id);
+        if (k >= 0) cSel.splice(k, 1);
+        else if (cSel.length < 4) cSel.push(id);
+        else return;
+        $("conn-msg").textContent = "";
+        renderConn();
+      });
+      grid.appendChild(b);
+    });
+    $("btn-conn-submit").disabled = cSel.length !== 4;
+  }
+  $("btn-conn-shuffle").addEventListener("click", () => {
+    if (cDone || stage !== "puzzle" || cIndex !== progress) return;
+    cOrder = shuffled(cOrder, Math.floor(Math.random() * 1e9) + 1);
+    renderConn();
+  });
+  $("btn-conn-clear").addEventListener("click", () => {
+    if (cDone || stage !== "puzzle" || cIndex !== progress) return;
+    cSel = [];
+    renderConn();
+  });
+  $("btn-conn-submit").addEventListener("click", () => {
+    if (cDone || stage !== "puzzle" || cIndex !== progress || cSel.length !== 4) return;
+    if (!clues[progress].p || clues[progress].p.k !== "c") return;
+    const counts = [0, 0, 0, 0];
+    cSel.forEach(id => { counts[id >> 2]++; });
+    const best = Math.max(...counts);
+    if (best < 4) {
+      $("conn-msg").textContent = best === 3 ? "One away…" : "Not a group — try again";
+      return;
+    }
+    const gi = cSel[0] >> 2;
+    pz.c[cIndex] = (pz.c[cIndex] || []).concat(gi);
+    cOrder = cOrder.filter(id => (id >> 2) !== gi);
+    cSel = [];
+    $("conn-msg").textContent = "";
+    const all = pz.c[cIndex].length >= 4;
+    if (!all) savePuzzles();
+    renderConn();
+    if (all) { cDone = true; puzzleSolved(cIndex, 900); } // saved there; pause to show the full board
+  });
+
+  // The organiser can type the skip code followed by a stop number ("skip 5") to go
+  // straight to the start of that stop, e.g. after swapping to a new link mid-hunt.
+  function jumpTo(i) {
+    progress = i;
+    storeSet(progressKey, String(i));
+    for (const f of ["s", "u", "h", "w", "n", "c"]) {
+      Object.keys(pz[f]).forEach(k => { if (Number(k) >= i) delete pz[f][k]; });
+    }
+    savePuzzles();
+    showStage();
+  }
+
   // ---- "Stuck?": the organiser's skip code gets the player past whatever is in the way ----
   function openStuck() {
     if (!hunt.skip || (stage !== "puzzle" && stage !== "hunting")) return;
@@ -1237,7 +1398,16 @@ function startPlay(data) {
   $("stuck-code").addEventListener("input", () => { $("stuck-err").hidden = true; });
   $("stuck-form").addEventListener("submit", ev => {
     ev.preventDefault();
-    if (!hunt.skip || normalisePassword($("stuck-code").value) !== normalisePassword(hunt.skip)) {
+    const typed = normalisePassword($("stuck-code").value), code = normalisePassword(hunt.skip || "");
+    const m = hunt.skip && typed.startsWith(code + " ") ? /^([0-9]{1,3})$/.exec(typed.slice(code.length + 1)) : null;
+    const stop = m ? Number(m[1]) : 0;
+    if (stop >= 1 && stop <= clues.length) {
+      $("stuck").hidden = true;
+      $("stuck-code").blur();
+      jumpTo(stop - 1);
+      return;
+    }
+    if (!hunt.skip || typed !== code) {
       $("stuck-err").hidden = false;
       $("stuck-code").focus();
       return;
@@ -1333,12 +1503,13 @@ function startEdit(data, password) {
   // Each clue carries its puzzle as editable fields (pk = type, pw = Wordle word,
   // pq / pa / ph = question, answers, hint) so switching type loses nothing typed.
   function newClue(lat, lng) {
-    return { t: "", lat: +lat.toFixed(6), lng: +lng.toFixed(6), r: DEFAULT_RADIUS_M, pk: "none", pw: "", pq: "", pa: "", ph: "", pm: "" };
+    return { t: "", lat: +lat.toFixed(6), lng: +lng.toFixed(6), r: DEFAULT_RADIUS_M, pk: "none", pw: "", pq: "", pa: "", ph: "", pm: "", pc: "" };
   }
   const editClues = (data ? data.clues : []).map(c => {
     const p = c.p || {};
     return { t: c.t, lat: c.lat, lng: c.lng, r: c.r, pk: c.p ? p.k : "none",
              pw: p.k === "w" ? p.a : "", pq: p.k === "q" ? p.q : "", pa: p.k === "q" ? p.a : "", ph: (p.k === "q" && p.h) || "",
+             pc: p.k === "c" ? p.g.map(g => g.n + ": " + g.w.join(", ")).join("\n") : "",
              pm: p.k === "q" && p.n ? p.n.map(x => x.q + " = " + x.a + (x.h ? " = " + x.h : "")).join("\n") : "" };
   });
   let selected = -1;
@@ -1386,10 +1557,10 @@ function startEdit(data, password) {
       const rad = document.createElement("span");
       rad.className = "rad"; rad.textContent = c.r + " m";
       let badge = null;
-      if (c.pk === "w" || c.pk === "q") {
+      if (c.pk === "w" || c.pk === "q" || c.pk === "c") {
         badge = document.createElement("span");
         badge.className = "badge";
-        badge.textContent = c.pk === "w" ? "Wordle" : "Question";
+        badge.textContent = c.pk === "w" ? "Wordle" : c.pk === "c" ? "Connections" : "Question";
       }
       const del = document.createElement("button");
       del.className = "del"; del.textContent = "✕";
@@ -1420,6 +1591,8 @@ function startEdit(data, password) {
       $("edit-q-answers").value = c.pa;
       $("edit-q-hint").value = c.ph;
       $("edit-q-more").value = c.pm;
+      $("edit-conn").value = c.pc;
+      $("edit-conn-wrap").hidden = c.pk !== "c";
       $("edit-wordle-wrap").hidden = c.pk !== "w";
       $("edit-q-wrap").hidden = c.pk !== "q";
     }
@@ -1507,10 +1680,10 @@ function startEdit(data, password) {
   $("edit-puzzle-type").addEventListener("change", () => {
     if (selected < 0) return;
     const v = $("edit-puzzle-type").value;
-    editClues[selected].pk = v === "w" || v === "q" ? v : "none";
+    editClues[selected].pk = v === "w" || v === "q" || v === "c" ? v : "none";
     renderList();
   });
-  [["edit-wordle-word", "pw"], ["edit-q-text", "pq"], ["edit-q-answers", "pa"], ["edit-q-hint", "ph"], ["edit-q-more", "pm"]].forEach(([id, field]) => {
+  [["edit-wordle-word", "pw"], ["edit-q-text", "pq"], ["edit-q-answers", "pa"], ["edit-q-hint", "ph"], ["edit-q-more", "pm"], ["edit-conn", "pc"]].forEach(([id, field]) => {
     $(id).addEventListener("input", () => { if (selected >= 0) editClues[selected][field] = $(id).value; });
   });
   // One "question = answers = hint" line. The separator is " = " (an equals sign with a
@@ -1526,6 +1699,19 @@ function startEdit(data, password) {
   }
   // Returns { p } (p undefined for "no puzzle") or { error, field } for a puzzle that can't be saved.
   function buildPuzzle(c) {
+    if (c.pk === "c") {
+      const lines = c.pc.split("\n").map(l => l.trim()).filter(l => l);
+      const bad = msg => ({ error: msg, field: "edit-conn" });
+      if (lines.length !== 4) return bad("a Connections board needs exactly four lines, one per group (it has " + lines.length + ").");
+      const g = lines.map(l => {
+        const at = l.indexOf(":");
+        return { n: at >= 0 ? l.slice(0, at).trim() : "", w: (at >= 0 ? l.slice(at + 1) : l).split(",").map(x => x.trim()).filter(x => x) };
+      });
+      const short = g.findIndex(x => x.w.length !== 4);
+      if (short >= 0) return bad("group " + (short + 1) + " of the Connections board needs exactly four words separated by commas (it has " + g[short].w.length + ").");
+      const p = cleanPuzzle({ k: "c", g });
+      return p ? { p } : bad("all sixteen words on the Connections board must be different.");
+    }
     if (c.pk === "w") {
       const p = cleanPuzzle({ k: "w", a: c.pw });
       return p ? { p } : { error: "the Wordle word must be " + WORDLE_MIN + "–" + WORDLE_MAX + " letters, A–Z only (no spaces, numbers or accents).", field: "edit-wordle-word" };

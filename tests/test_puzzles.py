@@ -989,7 +989,7 @@ def test_editor_puzzle_fields_follow_the_type(app):
     p = editor(app, 1)
     sel = p.locator("#edit-puzzle-type")
     expect(sel).to_be_visible()
-    assert p.evaluate("[...document.getElementById('edit-puzzle-type').options].map(o => o.value)") == ["none", "w", "q"]
+    assert p.evaluate("[...document.getElementById('edit-puzzle-type').options].map(o => o.value)") == ["none", "w", "q", "c"]
     expect(sel).to_have_value("none")
     q_fields = ("#edit-q-text", "#edit-q-answers", "#edit-q-hint")
     for f in ("#edit-wordle-word",) + q_fields:
